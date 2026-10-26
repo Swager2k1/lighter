@@ -1,0 +1,78 @@
+{
+  "updatedAt": "2026-10-24",
+  "currentFarmWeek": "Week 11 (24.10 - 30.10)",
+  "earnings": {
+    "MSFT": {
+      "date": "28.10.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 27.10"
+    },
+    "GOOGL": {
+      "date": "28.10.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 27.10"
+    },
+    "AMZN": {
+      "date": "29.10.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 28.10"
+    },
+    "COIN": {
+      "date": "29.10.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 28.10"
+    },
+    "INTC": {
+      "date": "29.10.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 28.10"
+    },
+    "AAPL": {
+      "date": "02.11.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 01.11"
+    },
+    "PLTR": {
+      "date": "02.11.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 01.11"
+    },
+    "AMD": {
+      "date": "03.11.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 02.11"
+    },
+    "NVDA": {
+      "date": "18.11.2026",
+      "time": "AMC",
+      "boost": true,
+      "risk": "Закрыть до 17.11"
+    },
+    "META": {
+      "date": "21.10.2026",
+      "time": "AMC",
+      "boost": false,
+      "risk": "Отчитался 21.10"
+    },
+    "TSLA": {
+      "date": "21.10.2026",
+      "time": "AMC",
+      "boost": false,
+      "risk": "Отчитался 21.10"
+    },
+    "TSM": {
+      "date": "15.10.2026",
+      "time": "BMO",
+      "boost": false,
+      "risk": "Отчитался 15.10"
+    }
+  }
+}

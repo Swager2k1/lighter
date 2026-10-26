@@ -1,0 +1,74 @@
+Week,Period,Asset,Venue,Leg_Description,Side,Entry_Price,Exit_Price,Size,Margin_Allocated,Initial_Deposit,Ending_Balance,Net_Price_PnL,Net_Balance_Change,Points,Cost_Per_Point_Price,Cost_Per_Point_Realized,Notes
+EXECUTIVE ALL-TIME KPI,04.09 - 23.10,PORTFOLIO SUMMARY,RH + Arb + Poly,ALL-TIME ACCUMULATED,Delta-Neutral,-,-,-,10905.75,10905.75,10906.00,-183.08,-76.20,159.11,1.15,0.48,"TOTAL: 159.11 pts | Realized Cost: $0.48/pt (Market avg: $3.17/pt) | Avg Yield: 3.4 pts per $1k margin/wk | Value at $8/pt: $1273 (Alpha: +1570%)"
+Week 1,04.09 - 11.09,TSM,Robinhood (W2),Robinhood 2 (Long),LONG,428.80,433.03,16.6050,1186.70,1198.70,1229.17,+70.24,+30.47,0.5,-,-,3-leg hedge
+Week 1,04.09 - 11.09,TSM,Robinhood (W1),Robinhood 1 (Short),SHORT,427.40,433.46,13.8817,988.84,998.83,860.08,-84.05,-138.75,0.4,-,-,3-leg hedge
+Week 1,04.09 - 11.09,TSM,Polymarket Perps,Polymarket (Short),SHORT,427.40,433.20,2.7233,194.00,194.00,178.20,-15.80,-15.80,0.1,-,-,3rd leg on Poly
+Week 1 Summary,04.09 - 11.09,TSM Hedge,RH + Poly,3-Leg Triple Hedge,Delta-Neutral,-,-,-,2369.54,2391.53,2267.45,-29.61,-124.08,1.00,29.61,124.08,First test week
+Week 2,11.09 - 18.09,TSM,Robinhood (W1),Robinhood 1 (Long),LONG,433.68,431.95,13.8429,860.08,860.08,897.37,-24.15,+37.29,2.85,-,-,2-leg RH+Arb
+Week 2,11.09 - 18.09,TSM,Arbitrum zkLighter (W1),Lighter Core 1 (Short),SHORT,433.76,432.74,13.8450,859.34,924.70,961.04,+12.78,+36.34,2.85,-,-,2-leg RH+Arb
+Week 2 TSM Summary,11.09 - 18.09,TSM Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,1719.42,1784.78,1858.41,-11.37,+73.63,5.70,1.99,-12.92 (Profit),Low OI - High yield
+Week 2,11.09 - 18.09,META,Robinhood (W2),Robinhood 2 (Long),LONG,648.06,676.00,13.2580,1229.17,1229.17,1624.44,+370.37,+395.27,3.00,-,-,2-leg RH+Arb
+Week 2,11.09 - 18.09,META,Arbitrum zkLighter (W2),Lighter Core 2 (Short),SHORT,647.77,675.40,13.2614,1227.00,1227.00,868.54,-366.70,-358.46,3.00,-,-,2-leg RH+Arb
+Week 2 META Summary,11.09 - 18.09,META Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,2456.17,2456.17,2492.98,+3.68,+36.81,6.00,0.00 (Profit),-6.14 (Profit),High OI - High vol
+Week 2 Total,11.09 - 18.09,TSM + META,RH + Arbitrum,Portfolio,Delta-Neutral,-,-,-,4175.59,4240.95,4351.39,-7.70,+110.44,11.70,0.66,-9.44 (Profit),Covered Week 1 loss
+TOTAL (2 WEEKS),04.09 - 18.09,TSM + META,RH + Arb + Poly,All-Time Portfolio,Delta-Neutral,-,-,-,4175.59,4543.23,4351.39,-37.31,-191.84,12.70,2.94,15.11,All positions closed
+Week 3,18.09 - 23.09,PLTR,Robinhood (W1),Robinhood 1 (Long),LONG,177.03,191.22,58.8800,1741.58,1741.58,2577.09,+835.51,+835.51,3.80,-,-,Closed at 1.5% buffer
+Week 3,18.09 - 23.09,PLTR,Arbitrum zkLighter (W1),Lighter Core 1 (Short),SHORT,176.91,191.85,58.8800,1738.30,1738.30,858.46,-879.84,-879.84,3.80,-,-,Closed at 1.5% buffer
+Week 3 PLTR Summary,18.09 - 23.09,PLTR Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,3479.88,3479.88,3435.55,-44.33,-44.33,7.60,5.83,5.83,Emergency close (Short near liq)
+Week 4,25.09 - 03.10,AMZN,Robinhood (W1),Robinhood 1 (Long),LONG,249.78,252.17,53.6000,2235.63,2246.32,2354.79,+128.10,+108.47,5.50,-,-,Mega-cap High OI
+Week 4,25.09 - 03.10,AMZN,Arbitrum zkLighter (W1),Lighter Core 1 (Short),SHORT,249.68,252.02,53.6000,2228.74,2266.04,2156.51,-125.42,-109.53,5.50,-,-,Mega-cap High OI
+Week 4 AMZN Summary,25.09 - 03.10,AMZN Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,4464.37,4512.36,4511.30,+2.68,-1.06,11.00,-,0.10,Week 4 total 24.7 pts
+Week 4,25.09 - 03.10,TSM,Robinhood (W2),Robinhood 2 (Long),LONG,450.89,472.94,24.3590,1887.77,1887.77,2416.52,+537.12,+528.75,8.65,-,-,Low OI High yield
+Week 4,25.09 - 03.10,TSM,Arbitrum zkLighter (W2),Lighter Core 2 (Short),SHORT,451.37,472.54,24.3590,1887.77,1887.77,1361.82,-515.68,-525.95,8.65,-,-,Low OI High yield
+Week 4 TSM Summary,25.09 - 03.10,TSM Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,3775.54,3775.54,3778.34,+21.44,+2.80,17.30,Profit,Profit (-0.16),Week 4 total 36.3 pts (+17.3 pts!)
+Week 4 Portfolio Total,25.09 - 03.10,AMZN + TSM,RH + Arbitrum,Combined Portfolio,Delta-Neutral,-,-,-,8239.91,8287.90,8289.64,+24.12,+1.74,28.30,Profit,Profit (-0.06),Cost per point: PROFIT (-$0.06/pt)
+TOTAL (4 WEEKS),04.09 - 03.10,Portfolio Total,RH + Arb + Poly,All-Time Portfolio,Delta-Neutral,-,-,-,8239.91,8287.90,8289.64,+18.23,+1.74,61.00,-,-,All positions closed cleanly
+Week 5,03.10 - 10.10,ORCL,Robinhood (W2),Robinhood 2 (Long),LONG,142.09,141.52,78.6500,1889.52,1889.52,1836.26,-44.91,-53.26,5.84,-,-,Closed 6x hedge
+Week 5,03.10 - 10.10,ORCL,Arbitrum zkLighter (W2),Lighter Core 2 (Short),SHORT,142.06,141.65,78.6583,1888.78,1888.78,1919.60,+32.25,+30.82,5.83,-,-,Closed 6x hedge
+Week 5 ORCL Summary,03.10 - 10.10,ORCL Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,3778.30,3778.30,3755.86,-12.66,-22.44,11.67,1.08,1.92,Week 5 W2 total 47.97 pts (+11.67 pts!)
+Week 5,03.10 - 10.10,TSM,Robinhood (W1),Robinhood 1 (Long),LONG,473.07,453.67,39.0200,2687.98,2687.98,2364.06,-756.99,-323.92,9.28,-,-,Closed 6.86x hedge
+Week 5,03.10 - 10.10,TSM,Arbitrum zkLighter (W1),Lighter Core 1 (Short),SHORT,471.73,453.56,39.0221,2688.05,2688.05,3908.62,+709.03,+1220.57,9.28,-,-,Closed 6.86x hedge
+Week 5 TSM Summary,03.10 - 10.10,TSM Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,5376.03,5376.03,6272.68,-47.96,-77.32,18.56,2.58,4.17,Week 5 W1 total 43.26 pts (+18.56 pts!)
+Week 5 Portfolio Total,03.10 - 10.10,ORCL + TSM,RH + Arbitrum,Combined Portfolio,Delta-Neutral,-,-,-,9154.33,9154.33,10028.54,-60.62,-99.76,30.23,2.01,3.30,Week 5 total 30.23 pts ($3.30/pt)
+TOTAL (5 WEEKS),04.09 - 10.10,Portfolio Total,RH + Arb + Poly,All-Time Portfolio,Delta-Neutral,-,-,-,9154.33,9154.33,10028.54,-42.39,-98.02,91.23,0.46,1.07,All positions closed cleanly
+Week 6,10.10 - 15.10,COIN,Robinhood (W1),Robinhood 1 (Long),LONG,180.27,170.71,119.8200,3082.26,3082.26,1936.47,-1145.48,-1145.79,12.97,-,-,Closed 7x hedge (Liq avoided)
+Week 6,10.10 - 15.10,COIN,Arbitrum zkLighter (W1),Lighter Core 1 (Short),SHORT,180.182,170.51,119.8200,3136.71,3136.71,4296.16,+1158.89,+1159.45,12.96,-,-,Closed 6.88x hedge
+Week 6 COIN Summary,10.10 - 15.10,COIN Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,6218.97,6218.97,6232.63,+13.41,+13.66,25.93,Profit,Profit (-0.53),Week 6 W1 total 69.19 pts (+25.93 pts!). Re-split into TSM+ORCL on 15.10 ($46.43 entry friction)
+Week 6,10.10 - 14.10,ORCL,Robinhood (W2),Robinhood 2 (Long),LONG,141.54,129.91,114.0000,2309.18,2309.18,1037.96,-1325.32,-1271.22,6.55,-,-,Closed 57s after short
+Week 6,10.10 - 14.10,ORCL,Arbitrum zkLighter (W2),Lighter Core 2 (Short),SHORT,141.19,130.22,114.0000,2377.60,2377.60,3635.41,+1250.39,+1257.81,6.55,-,-,Closed near RH liq
+Week 6 ORCL Summary,10.10 - 14.10,ORCL Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,4686.78,4686.78,4673.37,-74.92,-13.41,13.10,5.72,1.02,Week 6 W2 total 61.07 pts (+13.10 pts!). Emergency close (Liq saved net carry covered $61.51 spread gap)
+Week 6 Portfolio Total (Closed),10.10 - 15.10,COIN + ORCL,RH + Arbitrum,Combined Closed Portfolio,Delta-Neutral,-,-,-,10905.75,10905.75,10906.00,-61.51,+0.25,39.03,-,Profit (-0.01),Week 6 closed total 39.03 pts. Realized profit +$0.25! (W1: 69.19 pts | W2: 61.07 pts)
+TOTAL (6 WEEKS CLOSED),04.09 - 15.10,Portfolio Total,RH + Arb + Poly,All-Time Closed Portfolio,Delta-Neutral,-,-,-,10905.75,10905.75,10906.00,-103.90,-97.77,130.26,0.80,0.75,All closed hedges: 130.26 pts at $0.75/pt (W1: 69.19 pts | W2: 61.07 pts)
+Week 6,15.10 - 16.10,PLTR,Robinhood (W2),Robinhood 2 (Long),LONG,198.997,185.60,92.2590,2635.40,2635.40,1359.00,-1236.00,-1276.40,-,-,-,Closed manually (Avoided liq -1276.40 realized)
+Week 6,15.10 - 16.10,PLTR,Arbitrum zkLighter (W2),Lighter Core 2 (Short),SHORT,200.65,185.60,80.3500,2336.48,2336.48,3581.16,+1209.27,+1244.68,-,-,-,Closed manually (+1244.68 realized incl $1000 to ETH)
+Week 6 PLTR Summary,15.10 - 16.10,PLTR Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,4971.88,4971.88,4940.16,-26.73,-31.72,-,-,-,Closed manually (Saved capital net loss only -$31.72 / -0.64%)
+Week 6,15.10 - 17.10,TSM,Robinhood (W1),Robinhood 1 (Long),LONG,421.91,413.62,26.0000,1570.63,1570.63,1355.09,-215.54,-223.05,-,-,-,Closed manually (TSM post-earnings exit)
+Week 6,15.10 - 17.10,TSM,Arbitrum zkLighter (W1),Lighter Core 1 (Short),SHORT,420.94,414.12,26.0000,1826.00,1826.00,2003.32,+177.32,+179.32,-,-,-,Closed manually (+177.32 offset RH loss)
+Week 6 TSM Summary,15.10 - 17.10,TSM Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,3396.63,3396.63,3358.41,-38.22,-43.73,-,-,-,Closed cleanly (Net loss -$43.73 / -1.29%)
+Week 6,15.10 - 17.10,ORCL,Robinhood (W1),Robinhood 1 (Long),LONG,128.17,128.26,101.0000,1857.37,1857.37,1866.46,+9.09,+2.95,-,-,-,Closed manually (RH Long profit +$9.09)
+Week 6,15.10 - 17.10,ORCL,Arbitrum zkLighter (W1),Lighter Core 1 (Short),SHORT,127.96,128.73,101.0135,1846.50,1846.50,1768.72,-77.78,-75.34,-,-,-,Closed manually (Arb Short loss -$77.78)
+Week 6 ORCL Summary,15.10 - 17.10,ORCL Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,3703.87,3703.87,3635.18,-68.69,-72.39,-,-,-,Closed cleanly (Spread widened -$68.69)
+Week 6 W1 Closed Total,15.10 - 17.10,TSM + ORCL,RH + Arbitrum,W1 Closed Portfolio,Delta-Neutral,-,-,-,7100.50,7423.50,7312.86,-106.91,-110.64,-,-,-,W1 closed cleanly (Net loss -$110.64 / -1.49% on $7.4k)
+Week 6,17.10 - 19.10,INTC,Robinhood (W2),Robinhood 2 (Short),SHORT,89.290,95.18,191.2100,2468.82,2468.82,1343.10,-1126.23,-1125.72,-,-,-,Closed manually near liq (Avoided liq -1125.72 realized)
+Week 6,17.10 - 19.10,INTC,Arbitrum zkLighter (W2),Lighter Core 2 (Long),LONG,89.389,95.21,191.2700,2471.16,2471.16,3585.31,+1113.88,+1114.15,-,-,-,Closed manually (+1114.15 offset RH loss)
+Week 6 INTC Summary,17.10 - 19.10,INTC Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,4939.98,4939.98,4928.41,-12.35,-11.58,-,-,-,Closed manually (Saved capital net loss only -$11.58 / -0.23%)
+Week 6,17.10 - 23.10,BABA,Robinhood (W1),Robinhood 1 (Short),SHORT,108.738,100.350,156.2739,2426.71,2426.71,3721.01,+1310.83,+1294.30,3.65,-,-,Closed by market (RH Short profit +$1310.83)
+Week 6,17.10 - 23.10,BABA,Arbitrum zkLighter (W1),Lighter Core 1 (Long),LONG,109.020,100.320,156.5739,2434.50,2434.50,1091.79,-1362.19,-1342.71,3.65,-,-,Closed by market (Arb Long loss -$1362.19 offset RH)
+Week 6 BABA Summary,17.10 - 23.10,BABA Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,4861.21,4861.21,4812.80,-51.36,-48.41,7.30,7.04,6.63,"Closed cleanly (Price -$51.36, funding +$2.95, net -$48.41 / -0.99%)"
+Week 6,17.10 - 23.10,COIN,Robinhood (W1),Robinhood 1 (Short),SHORT,173.565,166.420,99.6600,2471.00,2471.00,3289.61,+712.07,+818.61,3.65,-,-,Closed by market (RH Short profit +$712.07)
+Week 6,17.10 - 23.10,COIN,Arbitrum zkLighter (W1),Lighter Core 1 (Long),LONG,173.692,166.420,99.6600,2472.55,2472.55,1739.15,-724.73,-733.40,3.66,-,-,Closed by market (Arb Long loss -$724.73 offset RH)
+Week 6 COIN Summary,17.10 - 23.10,COIN Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,4943.55,4943.55,5028.76,-12.66,+85.21,7.31,1.73,Profit (-11.66),"Closed cleanly (Price -$12.66, funding +$14.18, net carry profit +$85.21)"
+Week 6 W1 Closed Total,17.10 - 23.10,BABA + COIN,RH + Arbitrum,W1 Closed Portfolio,Delta-Neutral,-,-,-,9804.76,9804.76,9841.56,-64.02,+36.80,14.61,4.38,Profit (-2.52),"W1 closed cleanly (Net change +$36.80, W1 total: 83.80 pts, +14.61 pts gained)"
+Week 6,20.10 - 23.10,AMD,Robinhood (W2),Robinhood 2 (Short),SHORT,539.470,515.40,31.5800,2433.11,2463.75,3224.09,+760.13,+760.34,2.42,-,-,Closed by market (RH Short profit +$760.13)
+Week 6,20.10 - 23.10,AMD,Arbitrum zkLighter (W2),Lighter Core 2 (Long),LONG,539.650,515.10,31.5800,2431.95,2464.31,1688.74,-775.29,-775.57,2.43,-,-,Closed by market (Arb Long loss -$775.29 offset RH)
+Week 6 AMD Summary,20.10 - 23.10,AMD Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,4865.06,4928.06,4912.83,-15.16,-15.23,14.24,1.06,1.07,"Closed cleanly (Price -$15.16, net loss -$15.23 / -0.31%, W2 week total: 14.24 pts, ending 75.31 pts)"
+Week 6 W2 Closed Total,17.10 - 23.10,INTC + AMD,RH + Arbitrum,W2 Closed Portfolio,Delta-Neutral,-,-,-,9805.04,9868.04,9841.24,-27.51,-26.81,14.24,1.93,1.88,"W2 closed cleanly (INTC -$11.58, AMD -$15.23, W2 total: 75.31 pts, +14.24 pts gained)"
+Week 6 Portfolio Final (All Closed),10.10 - 23.10,All Assets,RH + Arbitrum,All Closed Positions,Delta-Neutral,-,-,-,19609.80,19672.80,19682.80,-91.53,+10.00,28.85,3.17,4.59,"All positions 100% closed (Week 6: +28.85 pts, $132.37 spent -> $4.59/pt | All-Time: 159.11 pts at $0.48/pt)"
+Week 7,23.10 - 30.10,META,Robinhood (W1),Robinhood 1 (Short),SHORT,644.970,OPEN,60.3893,4918.62,4918.62,4914.57,-4.05,-4.05,OPEN,-,-,Active Short leg (Liq: $705.26 | buffer: 9.33% | Notional: $38949.29)
+Week 7,23.10 - 30.10,META,Arbitrum zkLighter (W1),Lighter Core 1 (Long),LONG,644.930,OPEN,60.4000,4922.21,4922.21,4933.11,+10.90,+10.90,OPEN,-,-,Active Long leg (Liq: $580.86 | buffer: 9.95% | Notional: $38953.77)
+Week 7 META Summary,23.10 - 30.10,META Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,9840.83,9840.83,9847.68,+6.85,+6.85,Farming,-,-,"Active Delta-Neutral (Entry spread edge: +$0.04/sh, Entry fee: $0, uPnL: +$6.85, 2.5x points boost active)"
+Week 7,23.10 - 30.10,PLTR,Robinhood (W2),Robinhood 2 (Short),SHORT,196.901,OPEN,86.2700,2428.21,2428.21,2453.93,-1.15,-1.15,OPEN,-,-,Active Short leg (Liq: $212.31 | buffer: 7.84% | Notional: $16987.77)
+Week 7,23.10 - 30.10,PLTR,Arbitrum zkLighter (W2),Lighter Core 2 (Long),LONG,196.973,OPEN,86.2730,2457.79,2457.79,2450.23,-7.56,-7.56,OPEN,-,-,Active Long leg (Liq: $179.24 | buffer: 8.96% | Notional: $16985.86)
+Week 7 PLTR Summary,23.10 - 30.10,PLTR Hedge,RH + Arbitrum,Hedge,Delta-Neutral,-,-,-,4886.00,4886.00,4904.16,-8.71,-8.71,Farming,-,-,"Active Delta-Neutral (Entry spread cost: -$6.21 / 0.036%, Size delta: 0.003 PLTR / $0.59, 2.5x points boost active)"
+Week 7,23.10 - 30.10,META,Robinhood + Arbitrum,META Closed Hedge,Delta-Neutral,644.97,640.10,60.3893,9840.83,9840.83,-,+2.37,+2.37,0,-,-,"Closed via /c META (Held ~26.2h from 23.10 18:00 to 24.10 20:15. Exit: $640.10, Net PnL: +$2.37)"
+Week 7,23.10 - 30.10,INTC,Wallet 1 (W1),INTC Hedge,Delta-Neutral,86.15,-,452.0027,4918.40,4918.40,-,0,-39.78,0,-,-,"Opened via /o INTC (Opened 24.10 20:23. Friction: -$39.78, Effective Leverage: 7.92x)"
