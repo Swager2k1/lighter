@@ -110,15 +110,14 @@ test('getCurrentTradingWeek returns Week 7 and 23.10 - 30.10', async () => {
   assert.equal(weekInfo.period, '23.10 - 30.10');
 });
 
-test('activateHedgeOnchain loads live on-chain INTC positions from Lighter', async () => {
-  const { activateHedgeOnchain } = await import('../src/services/positionSyncService.js');
-  const result = await activateHedgeOnchain('INTC');
-
-  assert.ok(result.includes('ПОЗИЦИЯ INTC УСПЕШНО АКТИВИРОВАНА'));
-  assert.ok(result.includes('452.0027'));
-  assert.ok(result.includes('86.15'));
-  assert.ok(result.includes('91.54'));
-  assert.ok(result.includes('Week 7'));
+test('parseOpenCommandArgs validates all argument formats safely without side effects', async () => {
+  const { parseOpenCommandArgs } = await import('../src/services/positionSyncService.js');
+  const parsed = parseOpenCommandArgs(['COIN', 'w1', '100', '150.5', '7x']);
+  assert.equal(parsed.symbol, 'COIN');
+  assert.equal(parsed.targetWallet, 'w1');
+  assert.equal(parsed.manualSize, 100);
+  assert.equal(parsed.manualPrice, 150.5);
+  assert.equal(parsed.manualLeverage, 7);
 });
 
 

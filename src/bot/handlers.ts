@@ -3,7 +3,7 @@ import { getMarketInfo, scanSharedMarkets } from '../services/marketScanner.js';
 import { evaluateHedgeRisk } from '../services/riskEngine.js';
 import { calculateSafeLeverage } from '../services/calculator.js';
 import { fetchLighterPositions } from '../connectors/lighter.js';
-import { loadConfig, saveHedgeConfig, updateWallets, getActiveHedges } from '../config.js';
+import { loadConfig, saveHedgeConfig, updateWallets, getActiveHedges, deactivateHedge } from '../config.js';
 import { sleep, sleepByRange, getRandomNumber } from '../utils/sleep.js';
 import { fetchLiveWalletEquity, calculateWalletRebalance, formatRebalanceReport, RebalanceResult } from '../services/rebalanceService.js';
 import { scanCanonicalMarketMatrix, calculateActiveHedgesExitReport } from '../services/marketMatrixService.js';
@@ -12,11 +12,75 @@ import { activateHedgeOnchain, deactivateHedgeOnchain, parseOpenCommandArgs, par
 
 export async function handleStatusCommand(hedge?: ThreeLegHedge): Promise<string> {
   const config = loadConfig();
-  const hedges = hedge ? [hedge] : getActiveHedges(config);
+  const w1 = config.wallets.robinhoodWallet1?.trim();
+  const w2 = config.wallets.robinhoodWallet2?.trim();
 
-  if (hedges.length === 0) {
-    return '❌ Нет активных связок для мониторинга.';
+  // 1. Онлайн-сверка с блокчейном Lighter (проверяем реальные открытые позиции)
+  let onchainPositions: Array<{
+    symbol: string;
+    side: 'long' | 'short';
+    size: number;
+    entryPrice: number;
+    liquidationPrice?: number;
+    allocatedMargin?: number;
+    accountCollateral?: number;
+  }> = [];
+
+  try {
+    const [w1Rh, w1Arb, w2Rh, w2Arb] = await Promise.all([
+      w1 ? fetchLighterPositions(w1, 'rh') : Promise.resolve([]),
+      w1 ? fetchLighterPositions(w1, 'arb') : Promise.resolve([]),
+      w2 ? fetchLighterPositions(w2, 'rh') : Promise.resolve([]),
+      w2 ? fetchLighterPositions(w2, 'arb') : Promise.resolve([]),
+    ]);
+    onchainPositions = [...w1Rh, ...w1Arb, ...w2Rh, ...w2Arb];
+  } catch (err) {
+    console.error('[StatusCommand] Ошибка опроса ончейн-позиций:', err);
   }
+
+  const liveOnchainSymbols = new Set(
+    onchainPositions.filter((p) => p.size > 0).map((p) => p.symbol.toUpperCase())
+  );
+
+  const rawHedges = hedge ? [hedge] : getActiveHedges(config);
+
+  // 2. Автоматическая очистка: если связка в конфиге помечена как active, но в ончейне закрыта (size = 0)
+  // Мы деактивируем её, чтобы не слать ложные панические алерты!
+  const verifiedHedges: ThreeLegHedge[] = [];
+  for (const h of rawHedges) {
+    const sym = h.symbol.toUpperCase();
+    if (liveOnchainSymbols.size > 0 && !liveOnchainSymbols.has(sym)) {
+      console.warn(`[Auto-Sync] Связка ${sym} отсутствует в ончейне (закрыта). Автоматически деактивирую.`);
+      deactivateHedge(sym);
+      continue;
+    }
+
+    // Если позиция есть в ончейне, актуализируем данные ног:
+    const rhPos = onchainPositions.find((p) => p.symbol.toUpperCase() === sym && p.side === 'short');
+    if (rhPos && rhPos.size > 0) {
+      if (h.legs[0]) {
+        h.legs[0].size = rhPos.size;
+        h.legs[0].entryPrice = rhPos.entryPrice;
+        if (rhPos.liquidationPrice) h.legs[0].liquidationPrice = rhPos.liquidationPrice;
+      }
+    }
+    const arbPos = onchainPositions.find((p) => p.symbol.toUpperCase() === sym && p.side === 'long');
+    if (arbPos && arbPos.size > 0) {
+      if (h.legs[1]) {
+        h.legs[1].size = arbPos.size;
+        h.legs[1].entryPrice = arbPos.entryPrice;
+        if (arbPos.liquidationPrice) h.legs[1].liquidationPrice = arbPos.liquidationPrice;
+      }
+    }
+
+    verifiedHedges.push(h);
+  }
+
+  if (verifiedHedges.length === 0) {
+    return '❌ **Нет активных открытых позиций в ончейне!**\nВсе связки в кошельках закрыты. Чтобы найти лучшие пары для входа, нажмите **📈 Анализ входа (/o)**.';
+  }
+
+  const hedges = verifiedHedges;
 
   const reports: string[] = [];
   let grandTotalMargin = 0;

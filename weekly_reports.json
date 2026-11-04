@@ -125,6 +125,48 @@
       "costsUsd": 132.37,
       "costPerPointUsd": 4.59,
       "notes": "7 total opens across 2 wallets. Net realized cost $132.37 for 28.85 live points ($4.59/pt before Friday 2.5x hedge boost). All-time points: 159.11 pts."
+    },
+    {
+      "week": "Week 7 (W1)",
+      "period": "23.10 - 04.11",
+      "wallet": "Wallet 1 (W1)",
+      "rh": "7010.62 -> 7372.70",
+      "core": "2830.94 -> 5732.03",
+      "pts": 80.8,
+      "totalVolume": "1215.7k",
+      "oi": "220k-650k",
+      "pairs": "META, INTC, AMD, CRCL, COIN",
+      "costsUsd": 156.49,
+      "costPerPointUsd": 1.94,
+      "notes": "W1 aggressive rotation (META, INTC x4, AMD, CRCL x2, COIN). Gained +80.80 pts, all-time 164.60 pts. Realized cost $1.94/pt ($2.49/pt incl active COIN friction $44.86). Yield: 7.04 pts/$1k."
+    },
+    {
+      "week": "Week 7 (W2)",
+      "period": "23.10 - 04.11",
+      "wallet": "Wallet 2 (W2)",
+      "rh": "3224.09 -> 2848.53",
+      "core": "1688.74 -> 2039.59",
+      "pts": 28.99,
+      "totalVolume": "371.5k",
+      "oi": "250k-500k",
+      "pairs": "PLTR, AMD, TRX, TSM",
+      "costsUsd": 27.94,
+      "costPerPointUsd": 0.96,
+      "notes": "W2 conservative swing hold (PLTR, AMD x3, TRX, TSM). Gained +28.99 pts, all-time 104.30 pts. Realized cost $0.96/pt ($0.85/pt onchain net funding). Yield: 5.92 pts/$1k."
+    },
+    {
+      "week": "Week 7 (Portfolio Total)",
+      "period": "23.10 - 04.11",
+      "wallet": "Combined Portfolio (W1 + W2)",
+      "rh": "10234.71 -> 10221.23",
+      "core": "4519.68 -> 7771.62",
+      "pts": 109.79,
+      "totalVolume": "1587.2k",
+      "oi": "220k-650k",
+      "pairs": "META, PLTR, INTC, AMD, CRCL, TRX, TSM, COIN",
+      "costsUsd": 184.43,
+      "costPerPointUsd": 1.68,
+      "notes": "14 total opens across 2 wallets. Net realized cost $184.43 for 109.79 pts ($1.68/pt realized, $2.09/pt incl COIN friction). All-time points: 268.90 pts at $0.97/pt all-time. Yield: 6.71 pts/$1k."
     }
   ]
 }

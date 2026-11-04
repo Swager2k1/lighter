@@ -1,4 +1,4 @@
-import { getEarningsInfo } from './calendarService.js';
+import { getEarningsInfo, getReportingWeekInterval } from './calendarService.js';
 import { fetchLiveWalletEquity } from './rebalanceService.js';
 import { loadConfig, getActiveHedges } from '../config.js';
 
@@ -27,6 +27,7 @@ export interface OrderbookWalkResult {
 export interface MarketMatrixRow {
   symbol: string;
   type: string;
+  isStock: boolean;
   earningsText: string;
   hasEarningsBoost: boolean;
   daysUntilEarnings: number;
@@ -44,47 +45,170 @@ export interface MarketMatrixRow {
   edgeSpreadPct: number;
   macroRisk: string;
   verdict: string;
+  isNewListing?: boolean;
 }
 
-export const CANONICAL_ASSETS: Array<{ symbol: string; type: 'Stock' | 'Pre-IPO' | 'ETF' | 'Commodity'; macro: string }> = [
-  // Stocks (19) - Все доступные на Lighter Robinhood и Arbitrum
-  { symbol: 'MSFT', type: 'Stock', macro: '🟡 Отчет 28.10 / Azure' },
-  { symbol: 'GOOGL', type: 'Stock', macro: '🟡 Отчет 28.10 / Антимонополия' },
-  { symbol: 'AMZN', type: 'Stock', macro: '🟡 Отчет 29.10 / AWS' },
-  { symbol: 'COIN', type: 'Stock', macro: '🟡 Отчет 29.10 / Крипто-рынок' },
-  { symbol: 'INTC', type: 'Stock', macro: '🟡 Отчет 29.10 / Реструктуризация' },
-  { symbol: 'AAPL', type: 'Stock', macro: '🟡 Отчет 02.11 / Спрос iPhone' },
-  { symbol: 'PLTR', type: 'Stock', macro: '🟡 Отчет 02.11 / AI оборонка' },
-  { symbol: 'AMD', type: 'Stock', macro: '🟡 Отчет 03.11 / Конкуренция GPU' },
-  { symbol: 'NVDA', type: 'Stock', macro: '🟡 Отчет 18.11 / Лидер AI' },
-  { symbol: 'META', type: 'Stock', macro: '🟢 Отчитался 21.10 / Capex AI' },
-  { symbol: 'TSLA', type: 'Stock', macro: '🟢 Отчитался 23.10 / Robotaxi' },
-  { symbol: 'TSM', type: 'Stock', macro: '🟢 Отчитался 17.10 / CHIPS' },
-  { symbol: 'ORCL', type: 'Stock', macro: '🟢 Безопасно (Cloud / AI)' },
-  { symbol: 'BABA', type: 'Stock', macro: '🟡 Пошлины США-КНР / Стимулы' },
-  { symbol: 'MU', type: 'Stock', macro: '🟢 Цикл памяти DRAM' },
-  { symbol: 'SKHY', type: 'Stock', macro: '🟢 HBM спрос (Nvidia)' },
-  { symbol: 'SNDK', type: 'Stock', macro: '🟢 Безопасно' },
-  { symbol: 'AI', type: 'Stock', macro: '🔴 Тонкий стакан / Волатильность' },
-  { symbol: 'BE', type: 'Stock', macro: '🟢 Водородная энергетика' },
+export const KNOWN_STOCKS = new Set([
+  'AAPL', 'AMD', 'AMZN', 'BABA', 'COIN', 'GOOGL', 'INTC', 'META', 'MSFT',
+  'MU', 'NVDA', 'ORCL', 'PLTR', 'SKHY', 'SNDK', 'TSLA', 'TSM', 'BMNR'
+]);
 
-  // Pre-IPO (6)
-  { symbol: 'SHEIN', type: 'Pre-IPO', macro: '🔴 Тонкий стакан / Регуляторы' },
-  { symbol: 'CRWV', type: 'Pre-IPO', macro: '🟡 Low OI / Средний стакан' },
-  { symbol: 'CRCL', type: 'Pre-IPO', macro: '🟡 Low OI / Умеренно' },
-  { symbol: 'SPCX', type: 'Pre-IPO', macro: '🟡 Космос / Low OI' },
-  { symbol: 'OPENAI', type: 'Pre-IPO', macro: '🔴 Тонкий стакан' },
-  { symbol: 'ANTHROPIC', type: 'Pre-IPO', macro: '🔴 Тонкий стакан' },
+export const KNOWN_PRE_IPO = new Set([
+  'SHEIN', 'CRWV', 'CRCL', 'SPCX', 'OPENAI', 'ANTHROPIC'
+]);
 
-  // ETF (3)
-  { symbol: 'QQQ', type: 'ETF', macro: '🟢 Высокая ликвидность' },
-  { symbol: 'SPY', type: 'ETF', macro: '🟢 Макро-базовый' },
-  { symbol: 'SOXL', type: 'ETF', macro: '🔴 3x Леверидж (Не рекомендован)' },
+export const KNOWN_ETF = new Set([
+  'QQQ', 'SPY', 'SOXL', 'SPX', 'IWM'
+]);
 
-  // Commodities (2)
-  { symbol: 'XAU', type: 'Commodity', macro: '🟢 Золото / Хедж' },
-  { symbol: 'XAG', type: 'Commodity', macro: '🟢 Серебро' },
-];
+export const KNOWN_COMMODITIES = new Set([
+  'XAU', 'XAG', 'WTI', 'BRENTOIL', 'NATGAS'
+]);
+
+const ASSET_MACRO_INFO: Record<string, string> = {
+  MSFT: '🟡 Azure Cloud / AI Capex',
+  GOOGL: '🟡 Антимонополия / Поисковый AI',
+  AMZN: '🟡 AWS / E-commerce',
+  COIN: '🟡 Крипто-рынок / ETF объемы',
+  INTC: '🟡 Реструктуризация / Foundry',
+  AAPL: '🟡 Спрос iPhone / Услуги',
+  PLTR: '🟡 AI оборонка / Государственные контракты',
+  AMD: '🟡 Конкуренция GPU / Дата-центры',
+  NVDA: '🟡 Лидер AI / Blackwell спрос',
+  META: '🟢 Capex AI / Рекламная выручка',
+  TSLA: '🟢 Robotaxi / Спрос на EV',
+  TSM: '🟢 CHIPS / Передовые узлы',
+  ORCL: '🟢 Безопасно (Cloud / AI)',
+  BABA: '🟡 Пошлины США-КНР / Стимулы',
+  MU: '🟢 Цикл памяти DRAM / HBM',
+  SKHY: '🟢 HBM спрос (Nvidia партнер)',
+  SNDK: '🟢 Флеш-память / Стабильно',
+  BMNR: '🟡 Майнинг / Хэшрейт BTC',
+  SHEIN: '🔴 Тонкий стакан / Регуляторы',
+  CRWV: '🟡 Low OI / Средний стакан',
+  CRCL: '🟡 Low OI / Умеренно',
+  SPCX: '🟡 Космос / Low OI',
+  OPENAI: '🔴 Тонкий стакан / Частные оценки',
+  ANTHROPIC: '🔴 Тонкий стакан / Частные оценки',
+  QQQ: '🟢 Высокая ликвидность (Nasdaq 100)',
+  SPY: '🟢 Макро-базовый (S&P 500)',
+  SOXL: '🔴 3x Леверидж (Повышенная волатильность)',
+  XAU: '🟢 Золото / Макро-хедж',
+  XAG: '🟢 Серебро / Волатильность',
+};
+
+export function isStockSymbol(symbol: string): boolean {
+  const norm = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '').split('/')[0];
+  return KNOWN_STOCKS.has(norm);
+}
+
+export function getAssetType(symbol: string): 'Stock' | 'Pre-IPO' | 'ETF' | 'Commodity' | 'Crypto' {
+  const norm = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '').split('/')[0];
+  if (KNOWN_STOCKS.has(norm)) return 'Stock';
+  if (KNOWN_PRE_IPO.has(norm)) return 'Pre-IPO';
+  if (KNOWN_ETF.has(norm)) return 'ETF';
+  if (KNOWN_COMMODITIES.has(norm)) return 'Commodity';
+  return 'Crypto';
+}
+
+export function getAssetMacroRisk(symbol: string): string {
+  const norm = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '').split('/')[0];
+  return ASSET_MACRO_INFO[norm] || '🟢 Стандартный рыночный риск';
+}
+
+export function checkIsNewListing(createdAt: string | number | undefined, weekStart: Date): boolean {
+  if (!createdAt) return false;
+  const ts = typeof createdAt === 'string' ? parseInt(createdAt, 10) : createdAt;
+  if (!ts || isNaN(ts)) return false;
+  const ms = ts > 1e11 ? ts : ts * 1000;
+  return ms >= weekStart.getTime();
+}
+
+export interface HedgeabilityParams {
+  rhDetail?: {
+    symbol?: string;
+    status?: string;
+    is_frozen?: boolean;
+    open_interest?: number | string;
+    market_config?: { force_reduce_only?: boolean };
+  };
+  arbDetail?: {
+    symbol?: string;
+    status?: string;
+    is_frozen?: boolean;
+    open_interest?: number | string;
+    open_interest_usd?: number | string;
+    market_config?: { force_reduce_only?: boolean };
+  };
+  rhBidsCount: number;
+  rhAsksCount: number;
+  arbBidsCount: number;
+  arbAsksCount: number;
+}
+
+export function validateMarketHedgeability(params: HedgeabilityParams): { isHedgeable: boolean; reason?: string } {
+  const { rhDetail, arbDetail, rhBidsCount, rhAsksCount, arbBidsCount, arbAsksCount } = params;
+
+  if (!rhDetail || !arbDetail) {
+    return { isHedgeable: false, reason: 'Инструмент отсутствует на одной из бирж' };
+  }
+
+  if (rhDetail.status !== 'active' || arbDetail.status !== 'active') {
+    return { isHedgeable: false, reason: `Статус не active (RH: ${rhDetail.status}, Arb: ${arbDetail.status})` };
+  }
+
+  if (rhDetail.is_frozen || arbDetail.is_frozen) {
+    return { isHedgeable: false, reason: 'Рынок заморожен (is_frozen: true)' };
+  }
+
+  if (rhDetail.market_config?.force_reduce_only || arbDetail.market_config?.force_reduce_only) {
+    return { isHedgeable: false, reason: 'force_reduce_only включен (запрет на открытие новых позиций)' };
+  }
+
+  const rhOi = parseFloat(String(rhDetail.open_interest || '0'));
+  const arbOi = parseFloat(String(arbDetail.open_interest || '0'));
+  const arbOiUsd = parseFloat(String(arbDetail.open_interest_usd || '0'));
+  if (rhOi <= 0 || (arbOi <= 0 && arbOiUsd <= 0)) {
+    return { isHedgeable: false, reason: `Нулевой Open Interest (RH: ${rhOi}, Arb: ${arbOi})` };
+  }
+
+  if (rhBidsCount === 0 || rhAsksCount === 0 || arbBidsCount === 0 || arbAsksCount === 0) {
+    return { isHedgeable: false, reason: `Пустой стакан ордеров (RH b:${rhBidsCount} a:${rhAsksCount}, Arb b:${arbBidsCount} a:${arbAsksCount})` };
+  }
+
+  return { isHedgeable: true };
+}
+
+export function sortMarketMatrixRows(rows: MarketMatrixRow[]): MarketMatrixRow[] {
+  return [...rows].sort((a, b) => {
+    // 1. Активы с бустом (🔥 отчет недели или новый листинг) идут на самом верху
+    if (a.hasEarningsBoost && !b.hasEarningsBoost) return -1;
+    if (!a.hasEarningsBoost && b.hasEarningsBoost) return 1;
+
+    if (a.hasEarningsBoost && b.hasEarningsBoost) {
+      // Внутри бустов: сначала акции, затем остальные
+      if (a.isStock && !b.isStock) return -1;
+      if (!a.isStock && b.isStock) return 1;
+      // Сортировка по минимальному loss100Pct
+      if (Math.abs(a.loss100Pct - b.loss100Pct) > 0.005) {
+        return a.loss100Pct - b.loss100Pct;
+      }
+      return a.oiRobinhoodUsd - b.oiRobinhoodUsd;
+    }
+
+    // 2. Все Акции идут перед остальными рынками
+    if (a.isStock && !b.isStock) return -1;
+    if (!a.isStock && b.isStock) return 1;
+
+    // 3. Внутри категории: сначала фильтрация/ранжирование по минимальному lossMarket 100%
+    if (Math.abs(a.loss100Pct - b.loss100Pct) > 0.005) {
+      return a.loss100Pct - b.loss100Pct;
+    }
+
+    // 4. При близком лоссе — по возрастанию Robinhood OI (максимальный фарминг поинтов)
+    return a.oiRobinhoodUsd - b.oiRobinhoodUsd;
+  });
+}
 
 export function calculateDynamicNotional(totalEquity: number, leverage = 7): DynamicNotionalSizing {
   const safeEquity = totalEquity > 0 ? totalEquity : 10000;
@@ -194,18 +318,23 @@ export function formatTopCardsMessage(params: {
     `• 50% Notional (7x): **$${sizing.notional50Pct}** (маржа: $${sizing.margin50Pct})`,
     ``,
     `🏆 **${title}**`,
+    `*(Приоритет: 🔥 Бусты недели → 📈 Акции по мин. Loss 100% → 🌐 Другие пары)*`,
     `━━━━━━━━━━━━━━━━━━━━`,
   ];
 
   topRows.forEach((r, idx) => {
-    const icon = r.hasEarningsBoost ? '🔥' : idx === 0 ? '🟢' : '🔹';
+    let categoryBadge = r.isStock ? '📈 [АКЦИЯ]' : '🌐 [ДРУГОЙ РЫНОК]';
+    if (r.hasEarningsBoost) {
+      categoryBadge = r.isNewListing ? '🔥 [НОВЫЙ ЛИСТИНГ]' : '🔥 [БУСТ ОТЧЕТА]';
+    }
+
     const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)}` : `-$${r.loss100Usd}`;
     const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)}` : `-$${r.loss50Usd}`;
     const loss100PctStr = r.loss100Pct <= 0 ? `+${Math.abs(r.loss100Pct)}%` : `${r.loss100Pct}%`;
     const loss50PctStr = r.loss50Pct <= 0 ? `+${Math.abs(r.loss50Pct)}%` : `${r.loss50Pct}%`;
 
     lines.push(
-      `${idx + 1}. ${icon} **$${r.symbol}** (${r.earningsText})`,
+      `${idx + 1}. ${categoryBadge} **$${r.symbol}** (${r.earningsText})`,
       `   • Потери 100%: **${loss100Str}** (${loss100PctStr}) | 50%: **${loss50Str}** (${loss50PctStr})`,
       `   • OI RH: **${formatCompactUsd(r.oiRobinhoodUsd)}** 🟢 | OI Arb: **${formatCompactUsd(r.oiArbitrumUsd)}**`,
       `   • Стенки RH/Arb: **${r.wallRhL1}** / **${r.wallArbL1}** (макс 1 стенка: $${r.maxEntryWallUsd})`,
@@ -220,32 +349,53 @@ export function formatTopCardsMessage(params: {
 }
 
 export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: DynamicNotionalSizing): string {
+  const stocks = rows.filter((r) => r.isStock);
+  const otherMarkets = rows.filter((r) => !r.isStock);
+
+  const formatRow = (r: MarketMatrixRow, index: number) => {
+    const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)} (+${Math.abs(r.loss100Pct)}%)` : `-$${r.loss100Usd} (${r.loss100Pct}%)`;
+    const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)} (+${Math.abs(r.loss50Pct)}%)` : `-$${r.loss50Usd} (${r.loss50Pct}%)`;
+
+    let divider: string | null = null;
+    if (index === 0 && r.isStock) {
+      divider = '══════════ СЕКЦИЯ АКЦИЙ (STOCKS) ══════════';
+    } else if (index === stocks.length && !r.isStock) {
+      divider = '══════════ ДРУГИЕ РЫНКИ (CRYPTO / ETF / COMMODITIES) ══════════';
+    }
+
+    return {
+      ...(divider ? { divider } : {}),
+      rank: index + 1,
+      symbol: r.symbol,
+      type: r.type,
+      is_stock: r.isStock,
+      has_boost: r.hasEarningsBoost,
+      earnings: r.earningsText,
+      days_until_earnings: r.daysUntilEarnings < 9999 ? r.daysUntilEarnings : null,
+      loss_market_100pct: loss100Str,
+      loss_market_50pct: loss50Str,
+      oi_robinhood: formatCompactUsd(r.oiRobinhoodUsd),
+      oi_arbitrum: formatCompactUsd(r.oiArbitrumUsd),
+      walls_rh_bid_l1_l2: `${r.wallRhL1} / ${r.wallRhL2}`,
+      walls_arb_ask_l1_l2: `${r.wallArbL1} / ${r.wallArbL2}`,
+      max_entry_wall_usd: `$${r.maxEntryWallUsd}`,
+      edge_spread_pct: `${r.edgeSpreadPct}%`,
+      macro_risk: r.macroRisk,
+      verdict: r.verdict,
+    };
+  };
+
   const data = {
     generated_at: new Date().toLocaleString(),
     portfolio_equity_usd: sizing.totalEquity,
     notional_100pct_7x_usd: sizing.notional100Pct,
     notional_50pct_7x_usd: sizing.notional50Pct,
     total_markets: rows.length,
-    markets: rows.map((r) => {
-      const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)} (+${Math.abs(r.loss100Pct)}%)` : `-$${r.loss100Usd} (${r.loss100Pct}%)`;
-      const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)} (+${Math.abs(r.loss50Pct)}%)` : `-$${r.loss50Usd} (${r.loss50Pct}%)`;
-      return {
-        symbol: r.symbol,
-        type: r.type,
-        earnings: r.earningsText,
-        days_until_earnings: r.daysUntilEarnings < 9999 ? r.daysUntilEarnings : null,
-        loss_market_100pct: loss100Str,
-        loss_market_50pct: loss50Str,
-        oi_robinhood: formatCompactUsd(r.oiRobinhoodUsd),
-        oi_arbitrum: formatCompactUsd(r.oiArbitrumUsd),
-        walls_rh_bid_l1_l2: `${r.wallRhL1} / ${r.wallRhL2}`,
-        walls_arb_ask_l1_l2: `${r.wallArbL1} / ${r.wallArbL2}`,
-        max_entry_wall_usd: `$${r.maxEntryWallUsd}`,
-        edge_spread_pct: `${r.edgeSpreadPct}%`,
-        macro_risk: r.macroRisk,
-        verdict: r.verdict,
-      };
-    }),
+    total_stocks: stocks.length,
+    total_other_markets: otherMarkets.length,
+    stocks_section: stocks.map((r, idx) => formatRow(r, idx)),
+    other_markets_section: otherMarkets.map((r, idx) => formatRow(r, idx)),
+    markets: rows.map((r, idx) => formatRow(r, idx)),
   };
 
   return JSON.stringify(data, null, 2);
@@ -334,8 +484,6 @@ export async function scanCanonicalMarketMatrix(
   let selectedWallet: 'w1' | 'w2' | 'all' = targetWalletArg || 'all';
 
   if (!targetWalletArg) {
-    // Умный автодетект:
-    // Если W1 занят, а W2 свободен -> фокус на освободившийся W2!
     if (w1Active && !w2Active) {
       selectedWallet = 'w2';
     } else if (!w1Active && w2Active) {
@@ -343,7 +491,7 @@ export async function scanCanonicalMarketMatrix(
     } else if (w2Addr && !w1Addr) {
       selectedWallet = 'w2';
     } else {
-      selectedWallet = 'w1'; // По умолчанию W1 если оба свободны
+      selectedWallet = 'w1';
     }
   }
 
@@ -373,89 +521,146 @@ export async function scanCanonicalMarketMatrix(
     targetWalletLabel,
   ].join('\n');
 
-  // 2. Запрос рынков для получения market_id, котировок и реального OI
+  // 2. Динамический запрос реестра рынков с обеих бирж
   const [rhBooksRes, arbBooksRes] = await Promise.allSettled([
     fetch('https://api.rh.lighter.xyz/api/v1/orderBookDetails', {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      signal: AbortSignal.timeout(6000),
-    }).then((r) => r.json() as Promise<{ order_book_details?: Array<{ symbol: string; market_id: number; mark_price?: string; last_trade_price?: number; open_interest?: number | string }> }>),
+      signal: AbortSignal.timeout(7000),
+    }).then((r) => r.json() as Promise<{
+      order_book_details?: Array<{
+        symbol: string;
+        market_id: number;
+        status?: string;
+        is_frozen?: boolean;
+        created_at?: string;
+        mark_price?: string;
+        last_trade_price?: number;
+        open_interest?: number | string;
+        market_config?: { force_reduce_only?: boolean };
+      }>;
+    }>),
     fetch('https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails', {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      signal: AbortSignal.timeout(6000),
-    }).then((r) => r.json() as Promise<{ order_book_details?: Array<{ symbol: string; market_id: number; mark_price?: string; last_trade_price?: number; open_interest?: number | string }> }>),
+      signal: AbortSignal.timeout(7000),
+    }).then((r) => r.json() as Promise<{
+      order_book_details?: Array<{
+        symbol: string;
+        market_id: number;
+        status?: string;
+        is_frozen?: boolean;
+        created_at?: string;
+        mark_price?: string;
+        last_trade_price?: number;
+        open_interest?: number | string;
+        open_interest_usd?: number | string;
+        market_config?: { force_reduce_only?: boolean };
+      }>;
+    }>),
   ]);
 
-  const rhMap = new Map<string, { id: number; oi: number; price: number }>();
-  const arbMap = new Map<string, { id: number; oi: number; price: number }>();
+  const rhDetails = (rhBooksRes.status === 'fulfilled' && rhBooksRes.value?.order_book_details) || [];
+  const arbDetails = (arbBooksRes.status === 'fulfilled' && arbBooksRes.value?.order_book_details) || [];
 
-  if (rhBooksRes.status === 'fulfilled' && rhBooksRes.value?.order_book_details) {
-    for (const b of rhBooksRes.value.order_book_details) {
-      const sym = b.symbol.toUpperCase();
-      const p = parseFloat(b.mark_price || '0') || (typeof b.last_trade_price === 'number' ? b.last_trade_price : 0) || 1;
-      const rawOi = typeof b.open_interest === 'number' ? b.open_interest : parseFloat(b.open_interest || '0');
-      // Lighter отображает 2-сторонний долларовый Open Interest (Longs + Shorts = rawOi * p * 2)
-      const oiUsd = Math.round(rawOi * p * 2);
-      rhMap.set(sym, { id: b.market_id, oi: oiUsd, price: p });
+  const rhMap = new Map(rhDetails.map((b) => [b.symbol.toUpperCase(), b]));
+  const arbMap = new Map(arbDetails.map((b) => [b.symbol.toUpperCase(), b]));
+
+  // Определение интервала текущей отчетной недели
+  const now = new Date();
+  const weekInterval = getReportingWeekInterval(now);
+
+  // Находим пересекающиеся символы
+  const candidateSymbols: string[] = [];
+  for (const sym of rhMap.keys()) {
+    if (arbMap.has(sym)) {
+      candidateSymbols.push(sym);
     }
   }
 
-  if (arbBooksRes.status === 'fulfilled' && arbBooksRes.value?.order_book_details) {
-    for (const b of arbBooksRes.value.order_book_details) {
-      const sym = b.symbol.toUpperCase();
-      const p = parseFloat(b.mark_price || '0') || (typeof b.last_trade_price === 'number' ? b.last_trade_price : 0) || 1;
-      const rawOi = typeof b.open_interest === 'number' ? b.open_interest : parseFloat(b.open_interest || '0');
-      // В Arbitrum zkLighter поле open_interest_usd отдается напрямую сервером Lighter
-      const apiOiUsd = typeof (b as { open_interest_usd?: number | string }).open_interest_usd === 'number'
-        ? ((b as { open_interest_usd?: number | string }).open_interest_usd as number)
-        : parseFloat(((b as { open_interest_usd?: number | string }).open_interest_usd as string) || '0');
-      const oiUsd = apiOiUsd > 0 ? Math.round(apiOiUsd) : Math.round(rawOi * p * 2);
-      arbMap.set(sym, { id: b.market_id, oi: oiUsd, price: p });
-    }
-  }
-
-  // 3. Сканирование стаканов для каждого актива
+  // 3. Сканирование стаканов и 9-факторная валидация
   const rows: MarketMatrixRow[] = [];
 
-  for (const asset of CANONICAL_ASSETS) {
-    const rhInfo = rhMap.get(asset.symbol);
-    const arbInfo = arbMap.get(asset.symbol);
-    const earnings = getEarningsInfo(asset.symbol);
+  // Выполняем пачками по 8 запросов для стабильности соединений
+  const BATCH_SIZE = 8;
+  for (let i = 0; i < candidateSymbols.length; i += BATCH_SIZE) {
+    const chunk = candidateSymbols.slice(i, i + BATCH_SIZE);
+    await Promise.all(
+      chunk.map(async (sym) => {
+        const rhInfo = rhMap.get(sym)!;
+        const arbInfo = arbMap.get(sym)!;
 
-    const oiRh = rhInfo?.oi || 500000;
-    const oiArb = arbInfo?.oi || 800000;
+        // Предварительная проверка параметров рынка
+        if (
+          rhInfo.status !== 'active' ||
+          arbInfo.status !== 'active' ||
+          rhInfo.is_frozen ||
+          arbInfo.is_frozen ||
+          rhInfo.market_config?.force_reduce_only ||
+          arbInfo.market_config?.force_reduce_only
+        ) {
+          return;
+        }
 
-    let loss100Usd = 15;
-    let loss100Pct = 0.05;
-    let loss50Usd = 7.5;
-    let loss50Pct = 0.05;
-    let wallRhL1 = '$100 (15k)';
-    let wallRhL2 = '$99 (25k)';
-    let wallArbL1 = '$101 (20k)';
-    let wallArbL2 = '$102 (30k)';
-    let maxEntryWall = 15000;
-    let edgeSpreadPct = 0.05;
+        const [rhOb, arbOb] = await Promise.all([
+          fetchOrderBookOrders('rh', rhInfo.market_id, 50),
+          fetchOrderBookOrders('arb', arbInfo.market_id, 50),
+        ]);
 
-    if (rhInfo?.id && arbInfo?.id) {
-      const [rhOb, arbOb] = await Promise.all([
-        fetchOrderBookOrders('rh', rhInfo.id, 50),
-        fetchOrderBookOrders('arb', arbInfo.id, 50),
-      ]);
+        const validation = validateMarketHedgeability({
+          rhDetail: rhInfo,
+          arbDetail: arbInfo,
+          rhBidsCount: rhOb.bids.length,
+          rhAsksCount: rhOb.asks.length,
+          arbBidsCount: arbOb.bids.length,
+          arbAsksCount: arbOb.asks.length,
+        });
 
-      const rhBids = rhOb.bids;
-      const rhAsks = rhOb.asks;
-      const arbBids = arbOb.bids;
-      const arbAsks = arbOb.asks;
+        if (!validation.isHedgeable) {
+          return;
+        }
 
-      if (rhBids.length > 0 && arbAsks.length > 0) {
-        wallRhL1 = `$${rhBids[0].price} ($${Math.round(rhBids[0].price * rhBids[0].size)})`;
-        wallRhL2 = rhBids[1] ? `$${rhBids[1].price} ($${Math.round(rhBids[1].price * rhBids[1].size)})` : '—';
-        wallArbL1 = `$${arbAsks[0].price} ($${Math.round(arbAsks[0].price * arbAsks[0].size)})`;
-        wallArbL2 = arbAsks[1] ? `$${arbAsks[1].price} ($${Math.round(arbAsks[1].price * arbAsks[1].size)})` : '—';
+        const rhBids = rhOb.bids;
+        const rhAsks = rhOb.asks;
+        const arbBids = arbOb.bids;
+        const arbAsks = arbOb.asks;
+
+        const rhPrice = parseFloat(rhInfo.mark_price || '0') || (typeof rhInfo.last_trade_price === 'number' ? rhInfo.last_trade_price : 0) || 1;
+        const arbPrice = parseFloat(arbInfo.mark_price || '0') || (typeof arbInfo.last_trade_price === 'number' ? arbInfo.last_trade_price : 0) || 1;
+
+        const rawRhOi = typeof rhInfo.open_interest === 'number' ? rhInfo.open_interest : parseFloat(rhInfo.open_interest || '0');
+        const oiRh = Math.round(rawRhOi * rhPrice * 2);
+
+        const apiArbOiUsd = typeof arbInfo.open_interest_usd === 'number'
+          ? arbInfo.open_interest_usd
+          : parseFloat(String(arbInfo.open_interest_usd || '0'));
+        const rawArbOi = typeof arbInfo.open_interest === 'number' ? arbInfo.open_interest : parseFloat(arbInfo.open_interest || '0');
+        const oiArb = apiArbOiUsd > 0 ? Math.round(apiArbOiUsd) : Math.round(rawArbOi * arbPrice * 2);
+
+        // Бусты:
+        // А. Квартальный отчет на текущей неделе
+        const earnings = getEarningsInfo(sym, now);
+        // Б. Новый листинг текущей недели (created_at >= weekStart)
+        const isNewListing = checkIsNewListing(rhInfo.created_at, weekInterval.start) || checkIsNewListing(arbInfo.created_at, weekInterval.start);
+        const hasBoost = earnings.boost || isNewListing;
+
+        let earningsText = earnings.displayColumn;
+        if (isNewListing) {
+          earningsText = '🔥 НОВЫЙ ЛИСТИНГ НЕДЕЛИ';
+        }
+
+        const isStock = isStockSymbol(sym);
+        const assetType = getAssetType(sym);
+        const macro = getAssetMacroRisk(sym);
+
+        const wallRhL1 = `$${rhBids[0].price} ($${Math.round(rhBids[0].price * rhBids[0].size)})`;
+        const wallRhL2 = rhBids[1] ? `$${rhBids[1].price} ($${Math.round(rhBids[1].price * rhBids[1].size)})` : '—';
+        const wallArbL1 = `$${arbAsks[0].price} ($${Math.round(arbAsks[0].price * arbAsks[0].size)})`;
+        const wallArbL2 = arbAsks[1] ? `$${arbAsks[1].price} ($${Math.round(arbAsks[1].price * arbAsks[1].size)})` : '—';
 
         const rhL1Cash = rhBids[0].price * rhBids[0].size;
         const arbL1Cash = arbAsks[0].price * arbAsks[0].size;
-        maxEntryWall = Math.round(Math.min(rhL1Cash, arbL1Cash));
+        const maxEntryWall = Math.round(Math.min(rhL1Cash, arbL1Cash));
 
+        let edgeSpreadPct = 0.05;
         if (rhBids[0].price > 0) {
           edgeSpreadPct = parseFloat((((arbAsks[0].price - rhBids[0].price) / rhBids[0].price) * 100).toFixed(3));
         }
@@ -470,70 +675,56 @@ export async function scanCanonicalMarketMatrix(
           sellSideLevels: sellSide,
           buySideLevels: buySide,
         });
-        loss100Usd = walk100.lossUsd;
-        loss100Pct = walk100.lossPct;
 
         const walk50 = simulateOrderbookWalk({
           targetNotional: sizing.notional50Pct,
           sellSideLevels: sellSide,
           buySideLevels: buySide,
         });
-        loss50Usd = walk50.lossUsd;
-        loss50Pct = walk50.lossPct;
-      }
-    }
 
-    let verdict = 'БИТЬ МАРКЕТОМ';
-    if (loss100Pct > 0.15 || maxEntryWall < 2000) {
-      verdict = 'ЛИМИТНИК POST-ONLY (Тонкий стакан)';
-    } else if (earnings.boost) {
-      verdict = 'БИТЬ МАРКЕТОМ (🔥 Буст отчетов)';
-    } else if (oiRh < 800000) {
-      verdict = 'БИТЬ МАРКЕТОМ (🟢 Low OI yield)';
-    }
+        let verdict = 'БИТЬ МАРКЕТОМ';
+        if (walk100.lossPct > 0.15 || maxEntryWall < 2000) {
+          verdict = 'ЛИМИТНИК POST-ONLY (Тонкий стакан)';
+        } else if (hasBoost) {
+          verdict = isNewListing ? 'БИТЬ МАРКЕТОМ (🔥 Буст листинга)' : 'БИТЬ МАРКЕТОМ (🔥 Буст отчетов)';
+        } else if (oiRh < 800000) {
+          verdict = 'БИТЬ МАРКЕТОМ (🟢 Low OI yield)';
+        }
 
-    rows.push({
-      symbol: asset.symbol,
-      type: asset.type,
-      earningsText: earnings.displayColumn,
-      hasEarningsBoost: earnings.boost,
-      daysUntilEarnings: earnings.daysUntilEarnings,
-      loss100Usd,
-      loss100Pct,
-      loss50Usd,
-      loss50Pct,
-      oiRobinhoodUsd: oiRh,
-      oiArbitrumUsd: oiArb,
-      wallRhL1,
-      wallRhL2,
-      wallArbL1,
-      wallArbL2,
-      maxEntryWallUsd: maxEntryWall,
-      edgeSpreadPct,
-      macroRisk: asset.macro,
-      verdict,
-    });
+        rows.push({
+          symbol: sym,
+          type: assetType,
+          isStock,
+          earningsText,
+          hasEarningsBoost: hasBoost,
+          daysUntilEarnings: earnings.daysUntilEarnings,
+          loss100Usd: walk100.lossUsd,
+          loss100Pct: walk100.lossPct,
+          loss50Usd: walk50.lossUsd,
+          loss50Pct: walk50.lossPct,
+          oiRobinhoodUsd: oiRh,
+          oiArbitrumUsd: oiArb,
+          wallRhL1,
+          wallRhL2,
+          wallArbL1,
+          wallArbL2,
+          maxEntryWallUsd: maxEntryWall,
+          edgeSpreadPct,
+          macroRisk: macro,
+          verdict,
+          isNewListing,
+        });
+      })
+    );
   }
 
   // 4. Сортировка:
-  // А. Чем ближе отчет (меньше daysUntilEarnings), тем выше в выдаче!
-  // Б. При одинаковой дате отчета — по меньшему Robinhood OI (максимальный фарминг поинтов).
-  // В. Для активов без отчета — строго по возрастанию Robinhood OI.
-  rows.sort((a, b) => {
-    if (a.hasEarningsBoost && b.hasEarningsBoost) {
-      if (a.daysUntilEarnings !== b.daysUntilEarnings) {
-        return a.daysUntilEarnings - b.daysUntilEarnings;
-      }
-      return a.oiRobinhoodUsd - b.oiRobinhoodUsd;
-    }
+  // Приоритет: 🔥 Бусты (отчет / новый листинг) -> 📈 Акции (по мин loss100Pct и OI) -> 🌐 Другие пары
+  const sortedRows = sortMarketMatrixRows(rows);
 
-    if (a.hasEarningsBoost && !b.hasEarningsBoost) return -1;
-    if (!a.hasEarningsBoost && b.hasEarningsBoost) return 1;
+  // Для ТОП-5 карточек: сначала бусты и акции; если не хватает, добавляем другие
+  const top5 = sortedRows.slice(0, 5);
 
-    return a.oiRobinhoodUsd - b.oiRobinhoodUsd;
-  });
-
-  const top5 = rows.slice(0, 5);
   const topCardsText = formatTopCardsMessage({
     walletsSummary,
     sizing,
@@ -541,7 +732,7 @@ export async function scanCanonicalMarketMatrix(
     mode,
   });
 
-  const fileContent = generateCanonicalMarkdownFile(rows, sizing);
+  const fileContent = generateCanonicalMarkdownFile(sortedRows, sizing);
 
   return { topCardsText, fileContent };
 }
@@ -559,7 +750,6 @@ export async function calculateActiveHedgesExitReport(): Promise<{
     };
   }
 
-  // Запрос ID рынков и котировок
   const [rhBooksRes, arbBooksRes] = await Promise.allSettled([
     fetch('https://api.rh.lighter.xyz/api/v1/orderBookDetails', {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
@@ -646,7 +836,6 @@ export async function calculateActiveHedgesExitReport(): Promise<{
         rhAskPrice = rhAsks[0].price;
         arbBidPrice = arbBids[0].price;
 
-        // Выход: покупка шорта на RH из rhAsks, продажа лонга на Arb в arbBids
         const walk100 = simulateOrderbookWalk({
           targetNotional: totalNotional,
           sellSideLevels: arbBids,
@@ -718,4 +907,3 @@ export async function calculateActiveHedgesExitReport(): Promise<{
     inlineKeyboard: { inline_keyboard: buttons },
   };
 }
-
