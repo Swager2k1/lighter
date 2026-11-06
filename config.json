@@ -304,7 +304,7 @@
     },
     {
       "symbol": "XAU",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_xau_short",
@@ -332,12 +332,12 @@
         }
       ],
       "createdAt": 1793915477143,
-      "updatedAt": 1793915477143
+      "updatedAt": 1793990267818
     }
   ],
   "currentHedge": {
     "symbol": "XAU",
-    "active": true,
+    "active": false,
     "legs": [
       {
         "id": "rh_xau_short",
@@ -365,6 +365,6 @@
       }
     ],
     "createdAt": 1793915477143,
-    "updatedAt": 1793915477143
+    "updatedAt": 1793990267818
   }
 }
