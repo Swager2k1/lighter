@@ -84,7 +84,7 @@ Render начнет сборку (`npm install && npm run build`) и через 
 ```
 А в Telegram тебе придет приветственное сообщение от бота.
 
-Скопируй адрес твоего сервиса сверху страницы Render (он имеет вид `https://lighter-monitor-xxxx.onrender.com`).
+Скопируй адрес твоего сервиса сверху страницы Render (он имеет вид `https://lighter-monitor.onrender.com`).
 
 ---
 

@@ -81,3 +81,105 @@ test('syncFile successfully commits existing file using mocked fetch', async () 
   }
 });
 
+test('syncFile automatically retries on 409 conflict and succeeds', async () => {
+  const originalFetch = globalThis.fetch;
+  let putAttempts = 0;
+
+  try {
+    globalThis.fetch = (async (url: any, init?: any) => {
+      if (init?.method === 'GET') {
+        return new Response(JSON.stringify({ sha: putAttempts === 0 ? 'sha_v1' : 'sha_v2' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (init?.method === 'PUT') {
+        putAttempts++;
+        if (putAttempts === 1) {
+          return new Response(JSON.stringify({ message: 'is at 596c... but expected da114...' }), {
+            status: 409,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({ commit: { sha: 'retry_commit_ok' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response('Not Found', { status: 404 });
+    }) as any;
+
+    const service = new GithubSyncService({
+      token: 'valid_pat_123',
+      repo: 'Swager2k1/Lighter',
+      branch: 'main',
+    });
+
+    const result = await service.syncFile('test.csv', 'data', 'sync: retry test');
+    assert.equal(result.success, true);
+    assert.equal(result.commitSha, 'retry_commit_ok');
+    assert.equal(putAttempts, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('concurrent syncFile calls are queued sequentially without collision', async () => {
+  const originalFetch = globalThis.fetch;
+  const executionLog: string[] = [];
+
+  try {
+    globalThis.fetch = (async (url: any, init?: any) => {
+      const urlStr = url.toString();
+      if (init?.method === 'GET') {
+        return new Response(JSON.stringify({ sha: 'sha_base' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (init?.method === 'PUT') {
+        const body = JSON.parse(init.body);
+        executionLog.push(`start:${body.message}`);
+        await new Promise((r) => setTimeout(r, 20));
+        executionLog.push(`end:${body.message}`);
+        return new Response(JSON.stringify({ commit: { sha: 'sha_done' } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response('Not Found', { status: 404 });
+    }) as any;
+
+    const service = new GithubSyncService({
+      token: 'valid_pat_123',
+      repo: 'Swager2k1/Lighter',
+      branch: 'main',
+    });
+
+    // Запускаем два коммита одновременно (как config.json и pnl.csv при закрытии сделки)
+    const [res1, res2] = await Promise.all([
+      service.syncConfigFile('{}', 'sync: config'),
+      service.syncCsvFile('csv', 'sync: csv'),
+    ]);
+
+    assert.equal(res1.success, true);
+    assert.equal(res2.success, true);
+
+    // Должно выполниться строго по очереди: start:config -> end:config -> start:csv -> end:csv
+    assert.deepEqual(executionLog, [
+      'start:sync: config [skip ci]',
+      'end:sync: config [skip ci]',
+      'start:sync: csv [skip ci]',
+      'end:sync: csv [skip ci]',
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+

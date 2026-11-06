@@ -1,6 +1,7 @@
 /**
  * Сервис атомарной синхронизации файлов с GitHub репозиторием через REST API v3.
  * Не требует наличия установленного git CLI в облачном контейнере.
+ * Включает последовательную очередь (Queue) и авто-повтор при конфликтах 409 (Race condition).
  */
 
 export interface GithubSyncOptions {
@@ -11,6 +12,7 @@ export interface GithubSyncOptions {
 
 export interface SyncResult {
   success: boolean;
+  status?: number;
   commitSha?: string;
   reason?: string;
   error?: string;
@@ -20,6 +22,7 @@ export class GithubSyncService {
   private token: string;
   private repo: string;
   private branch: string;
+  private queue: Promise<any> = Promise.resolve();
 
   constructor(options?: GithubSyncOptions) {
     this.token = options?.token ?? (process.env.GITHUB_PAT || '');
@@ -72,7 +75,7 @@ export class GithubSyncService {
   }
 
   /**
-   * Атомарная отправка обновления файла в GitHub репозиторий
+   * Постановка коммита в последовательную очередь (предотвращает параллельные гонки запросов)
    */
   public async syncFile(
     filePath: string,
@@ -83,6 +86,53 @@ export class GithubSyncService {
       return { success: false, reason: 'missing_token' };
     }
 
+    return new Promise((resolve) => {
+      this.queue = this.queue
+        .then(() => this.executeSyncWithRetry(filePath, content, commitMessage))
+        .then(resolve)
+        .catch((err: any) => resolve({ success: false, error: err?.message || String(err) }));
+    });
+  }
+
+  /**
+   * Выполнение коммита с повторами при конфликтах 409 (Race condition сдвига ветки)
+   */
+  private async executeSyncWithRetry(
+    filePath: string,
+    content: string,
+    commitMessage: string,
+    maxRetries: number = 3
+  ): Promise<SyncResult> {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      attempt++;
+      const result = await this.performSingleCommit(filePath, content, commitMessage);
+      if (result.success) {
+        return result;
+      }
+
+      // При статусе 409 (ветка сдвинулась параллельным коммитом) повторяем со свежим SHA
+      if (result.status === 409 && attempt < maxRetries) {
+        const waitMs = attempt * 1200;
+        console.warn(`[GithubSync] Ветка обновилась другим коммитом (статус 409). Повтор ${attempt}/${maxRetries} через ${waitMs}мс...`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      return result;
+    }
+
+    return { success: false, error: 'Достигнут лимит попыток синхронизации' };
+  }
+
+  /**
+   * Одиночная попытка отправки PUT запроса к GitHub API
+   */
+  private async performSingleCommit(
+    filePath: string,
+    content: string,
+    commitMessage: string
+  ): Promise<SyncResult> {
     const cleanPath = filePath.replace(/^\/+/, '');
     const sha = await this.getFileSha(cleanPath);
     const contentBase64 = Buffer.from(content, 'utf-8').toString('base64');
@@ -122,12 +172,12 @@ export class GithubSyncService {
         const data = (await res.json()) as { commit?: { sha?: string } };
         const commitSha = data.commit?.sha;
         console.log(`[GithubSync] ✅ Файл ${cleanPath} синхронизирован с GitHub (commit: ${commitSha?.slice(0, 7)})`);
-        return { success: true, commitSha };
+        return { success: true, commitSha, status: res.status };
       }
 
       const errText = await res.text();
       console.error(`[GithubSync] ❌ Ошибка коммита ${cleanPath} (статус ${res.status}): ${errText}`);
-      return { success: false, error: errText };
+      return { success: false, status: res.status, error: errText };
     } catch (err: any) {
       console.error(`[GithubSync] ❌ Сетевая ошибка при коммите ${cleanPath}:`, err?.message || err);
       return { success: false, error: err?.message || String(err) };
@@ -150,4 +200,3 @@ export class GithubSyncService {
 }
 
 export const githubSyncService = new GithubSyncService();
-
