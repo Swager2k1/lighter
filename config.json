@@ -333,38 +333,70 @@
       ],
       "createdAt": 1793915477143,
       "updatedAt": 1793990267818
+    },
+    {
+      "symbol": "SKHY",
+      "active": true,
+      "legs": [
+        {
+          "id": "rh_skhy_short",
+          "name": "Wallet 1 (W1) (Long)",
+          "venue": "lighter",
+          "side": "long",
+          "margin": 6800.21,
+          "entryPrice": 126.65,
+          "leverage": 6.93,
+          "size": 372,
+          "liquidationPrice": 115.28,
+          "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        },
+        {
+          "id": "core_skhy_long",
+          "name": "Lighter Core (Wallet 1 (W1)) (Short)",
+          "venue": "lighter",
+          "side": "short",
+          "margin": 6800.21,
+          "entryPrice": 126.62,
+          "leverage": 6.93,
+          "size": 372,
+          "liquidationPrice": 136.74,
+          "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        }
+      ],
+      "createdAt": 1793994322775,
+      "updatedAt": 1793994322775
     }
   ],
   "currentHedge": {
-    "symbol": "XAU",
-    "active": false,
+    "symbol": "SKHY",
+    "active": true,
     "legs": [
       {
-        "id": "rh_xau_short",
+        "id": "rh_skhy_short",
         "name": "Wallet 1 (W1) (Long)",
         "venue": "lighter",
         "side": "long",
-        "margin": 6558.9,
-        "entryPrice": 4088.95,
-        "leverage": 7.91,
-        "size": 12.689,
-        "liquidationPrice": 3659.89,
+        "margin": 6800.21,
+        "entryPrice": 126.65,
+        "leverage": 6.93,
+        "size": 372,
+        "liquidationPrice": 115.28,
         "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       },
       {
-        "id": "core_xau_long",
+        "id": "core_skhy_long",
         "name": "Lighter Core (Wallet 1 (W1)) (Short)",
         "venue": "lighter",
         "side": "short",
-        "margin": 6558.9,
-        "entryPrice": 4088.97,
-        "leverage": 7.91,
-        "size": 12.689,
-        "liquidationPrice": 4497.95,
+        "margin": 6800.21,
+        "entryPrice": 126.62,
+        "leverage": 6.93,
+        "size": 372,
+        "liquidationPrice": 136.74,
         "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       }
     ],
-    "createdAt": 1793915477143,
-    "updatedAt": 1793990267818
+    "createdAt": 1793994322775,
+    "updatedAt": 1793994322775
   }
 }
