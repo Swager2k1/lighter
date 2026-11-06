@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "test": "node --import tsx --test tests/botHandlers.test.ts tests/calculator.test.ts tests/connectors.test.ts tests/criticalBot.test.ts tests/marketScanner.test.ts tests/riskEngine.test.ts tests/calendarService.test.ts tests/rebalanceService.test.ts tests/marketMatrixService.test.ts tests/positionSyncService.test.ts tests/botOpsCommands.test.ts",
+    "sync": "git pull --rebase --autostash origin main",
+    "deploy": "npm run typecheck && npm test && git pull --rebase --autostash origin main && git push origin main",
+    "test": "node --import tsx --test tests/botHandlers.test.ts tests/botOpsCommands.test.ts tests/calculator.test.ts tests/calendarService.test.ts tests/config.test.ts tests/connectors.test.ts tests/criticalBot.test.ts tests/githubSyncService.test.ts tests/healthServer.test.ts tests/marketMatrixService.test.ts tests/marketMatrixValidation.test.ts tests/marketScanner.test.ts tests/positionSyncService.test.ts tests/rebalanceService.test.ts tests/riskEngine.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

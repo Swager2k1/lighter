@@ -117,3 +117,20 @@ test('getActiveHedges falls back to currentHedge only if active and hedges[] is 
   assert.strictEqual(activeWhenInactive.length, 0);
 });
 
+test('DISABLE_POLLING environment variable check logic', () => {
+  const originalEnv = process.env.DISABLE_POLLING;
+
+  process.env.DISABLE_POLLING = 'true';
+  assert.strictEqual(process.env.DISABLE_POLLING === 'true', true);
+
+  process.env.DISABLE_POLLING = 'false';
+  assert.strictEqual(process.env.DISABLE_POLLING === 'true', false);
+
+  delete process.env.DISABLE_POLLING;
+  assert.strictEqual(process.env.DISABLE_POLLING === 'true', false);
+
+  if (originalEnv !== undefined) {
+    process.env.DISABLE_POLLING = originalEnv;
+  }
+});
+

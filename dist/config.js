@@ -1,8 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import dotenv from 'dotenv';
+import { githubSyncService } from './services/githubSyncService.js';
 dotenv.config();
 const CONFIG_PATH = path.resolve(process.cwd(), 'config.json');
+function writeConfigAndSync(toSave, message) {
+    const jsonStr = JSON.stringify(toSave, null, 2);
+    fs.writeFileSync(CONFIG_PATH, jsonStr, 'utf-8');
+    githubSyncService.syncConfigFile(jsonStr, `${message} [skip ci]`).catch((syncErr) => {
+        console.warn('[Config] Предупреждение облачной синхронизации config.json:', syncErr?.message || syncErr);
+    });
+}
 export function loadConfig() {
     try {
         if (fs.existsSync(CONFIG_PATH)) {
@@ -94,7 +102,7 @@ export function saveHedgeConfig(hedge) {
             hedges: existingHedges,
             currentHedge: hedge,
         };
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(toSave, null, 2), 'utf-8');
+        writeConfigAndSync(toSave, `sync: save hedge ${hedge.symbol}`);
     }
     catch (err) {
         console.error('Ошибка сохранения config.json:', err);
@@ -112,7 +120,7 @@ export function updateWallets(wallets) {
             hedges: current.hedges,
             currentHedge: current.currentHedge,
         };
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(toSave, null, 2), 'utf-8');
+        writeConfigAndSync(toSave, 'sync: update wallets');
     }
     catch (err) {
         console.error('Ошибка обновления кошельков в config.json:', err);
@@ -155,7 +163,7 @@ export function deactivateHedge(symbol) {
                 hedges: current.hedges,
                 currentHedge: current.currentHedge,
             };
-            fs.writeFileSync(CONFIG_PATH, JSON.stringify(toSave, null, 2), 'utf-8');
+            writeConfigAndSync(toSave, `sync: deactivate hedge ${norm}`);
         }
         return found;
     }

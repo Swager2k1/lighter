@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, saveHedgeConfig, deactivateHedge } from '../config.js';
 import { fetchLighterPositions, fetchLighterTicker } from '../connectors/lighter.js';
+import { githubSyncService } from './githubSyncService.js';
 import { ThreeLegHedge } from '../types.js';
 
 export interface EntryFrictionParams {
@@ -70,6 +71,18 @@ export function appendRowToCsv(csvRow: string): void {
     fs.appendFileSync(csvPath, `\n${csvRow}`);
   } catch (err) {
     console.error('[PositionSync] Ошибка записи в pnl_and_points_analysis.csv:', err);
+  }
+
+  // Облачная синхронизация с репозиторием GitHub при наличии токена
+  try {
+    if (fs.existsSync(csvPath)) {
+      const fullContent = fs.readFileSync(csvPath, 'utf-8');
+      githubSyncService.syncCsvFile(fullContent, `sync: log trade row [skip ci]`).catch((syncErr) => {
+        console.warn('[PositionSync] Предупреждение облачной синхронизации CSV:', syncErr?.message || syncErr);
+      });
+    }
+  } catch (syncReadErr) {
+    console.error('[PositionSync] Ошибка чтения CSV для облачной синхронизации:', syncReadErr);
   }
 }
 

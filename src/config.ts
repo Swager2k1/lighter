@@ -2,10 +2,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import { AppConfig, ThreeLegHedge } from './types.js';
+import { githubSyncService } from './services/githubSyncService.js';
 
 dotenv.config();
 
 const CONFIG_PATH = path.resolve(process.cwd(), 'config.json');
+
+function writeConfigAndSync(toSave: any, message: string): void {
+  const jsonStr = JSON.stringify(toSave, null, 2);
+  fs.writeFileSync(CONFIG_PATH, jsonStr, 'utf-8');
+  githubSyncService.syncConfigFile(jsonStr, `${message} [skip ci]`).catch((syncErr) => {
+    console.warn('[Config] Предупреждение облачной синхронизации config.json:', syncErr?.message || syncErr);
+  });
+}
 
 export interface FullConfig extends AppConfig {
   currentHedge: ThreeLegHedge;
@@ -102,7 +111,7 @@ export function saveHedgeConfig(hedge: ThreeLegHedge): void {
       hedges: existingHedges,
       currentHedge: hedge,
     };
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(toSave, null, 2), 'utf-8');
+    writeConfigAndSync(toSave, `sync: save hedge ${hedge.symbol}`);
   } catch (err) {
     console.error('Ошибка сохранения config.json:', err);
   }
@@ -120,7 +129,7 @@ export function updateWallets(wallets: Partial<AppConfig['wallets']>): void {
       hedges: current.hedges,
       currentHedge: current.currentHedge,
     };
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(toSave, null, 2), 'utf-8');
+    writeConfigAndSync(toSave, 'sync: update wallets');
   } catch (err) {
     console.error('Ошибка обновления кошельков в config.json:', err);
   }
@@ -167,7 +176,7 @@ export function deactivateHedge(symbol: string): boolean {
         hedges: current.hedges,
         currentHedge: current.currentHedge,
       };
-      fs.writeFileSync(CONFIG_PATH, JSON.stringify(toSave, null, 2), 'utf-8');
+      writeConfigAndSync(toSave, `sync: deactivate hedge ${norm}`);
     }
     return found;
   } catch (err) {

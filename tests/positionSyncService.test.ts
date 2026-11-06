@@ -120,4 +120,32 @@ test('parseOpenCommandArgs validates all argument formats safely without side ef
   assert.equal(parsed.manualLeverage, 7);
 });
 
+test('appendRowToCsv triggers cloud sync without throwing errors', async () => {
+  const { appendRowToCsv } = await import('../src/services/positionSyncService.js');
+  const { githubSyncService } = await import('../src/services/githubSyncService.js');
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const csvPath = path.resolve(process.cwd(), 'pnl_and_points_analysis.csv');
+  const originalCsv = fs.existsSync(csvPath) ? fs.readFileSync(csvPath, 'utf-8') : null;
+
+  let syncCalled = false;
+  const originalSync = githubSyncService.syncCsvFile;
+  githubSyncService.syncCsvFile = async (content: string, msg?: string) => {
+    syncCalled = true;
+    return { success: true };
+  };
+
+  try {
+    appendRowToCsv('TestWeek,TestPeriod,TESTASSET,Venue,Leg,BUY,100,100,1,10,10,10,0,0,0,0,0,"Test row"');
+    assert.equal(syncCalled, true);
+  } finally {
+    githubSyncService.syncCsvFile = originalSync;
+    if (originalCsv !== null) {
+      fs.writeFileSync(csvPath, originalCsv, 'utf-8');
+    }
+  }
+});
+
+
 

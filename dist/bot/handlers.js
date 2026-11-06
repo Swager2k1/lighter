@@ -21,7 +21,12 @@ export async function handleStatusCommand(hedge) {
             w2 ? fetchLighterPositions(w2, 'rh') : Promise.resolve([]),
             w2 ? fetchLighterPositions(w2, 'arb') : Promise.resolve([]),
         ]);
-        onchainPositions = [...w1Rh, ...w1Arb, ...w2Rh, ...w2Arb];
+        onchainPositions = [
+            ...w1Rh.map((p) => ({ ...p, walletAddress: w1, venueType: 'rh' })),
+            ...w1Arb.map((p) => ({ ...p, walletAddress: w1, venueType: 'arb' })),
+            ...w2Rh.map((p) => ({ ...p, walletAddress: w2, venueType: 'rh' })),
+            ...w2Arb.map((p) => ({ ...p, walletAddress: w2, venueType: 'arb' })),
+        ];
         onchainSuccess = true;
     }
     catch (err) {
@@ -40,22 +45,43 @@ export async function handleStatusCommand(hedge) {
             continue;
         }
         // Если позиция есть в ончейне, актуализируем данные ног:
-        const rhPos = onchainPositions.find((p) => p.symbol.toUpperCase() === sym && p.side === 'short');
-        if (rhPos && rhPos.size > 0) {
-            if (h.legs[0]) {
-                h.legs[0].size = rhPos.size;
-                h.legs[0].entryPrice = rhPos.entryPrice;
-                if (rhPos.liquidationPrice)
-                    h.legs[0].liquidationPrice = rhPos.liquidationPrice;
+        // Сопоставляем каждую ногу по её целевой площадке (rh/arb), адресу кошелька и стороне (long/short)
+        for (const leg of h.legs) {
+            const isArb = leg.id?.startsWith('core_') || leg.name?.includes('Core');
+            const targetVenue = isArb ? 'arb' : 'rh';
+            // 1. Точное совпадение: символ + venueType + walletAddress + side
+            let matchedPos = onchainPositions.find((p) => {
+                if (p.symbol.toUpperCase() !== sym)
+                    return false;
+                if (leg.walletAddress && p.walletAddress && p.walletAddress.toLowerCase() !== leg.walletAddress.toLowerCase()) {
+                    return false;
+                }
+                if (p.venueType && p.venueType !== targetVenue)
+                    return false;
+                return p.side === leg.side;
+            });
+            // 2. Fallback: совпадение по символу + venueType + walletAddress
+            if (!matchedPos) {
+                matchedPos = onchainPositions.find((p) => {
+                    if (p.symbol.toUpperCase() !== sym)
+                        return false;
+                    if (leg.walletAddress && p.walletAddress && p.walletAddress.toLowerCase() !== leg.walletAddress.toLowerCase()) {
+                        return false;
+                    }
+                    return p.venueType === targetVenue;
+                });
             }
-        }
-        const arbPos = onchainPositions.find((p) => p.symbol.toUpperCase() === sym && p.side === 'long');
-        if (arbPos && arbPos.size > 0) {
-            if (h.legs[1]) {
-                h.legs[1].size = arbPos.size;
-                h.legs[1].entryPrice = arbPos.entryPrice;
-                if (arbPos.liquidationPrice)
-                    h.legs[1].liquidationPrice = arbPos.liquidationPrice;
+            // 3. Fallback: совпадение по символу + side
+            if (!matchedPos) {
+                matchedPos = onchainPositions.find((p) => p.symbol.toUpperCase() === sym && p.side === leg.side);
+            }
+            if (matchedPos && matchedPos.size > 0) {
+                leg.size = matchedPos.size;
+                leg.entryPrice = matchedPos.entryPrice;
+                leg.side = matchedPos.side;
+                if (matchedPos.liquidationPrice) {
+                    leg.liquidationPrice = matchedPos.liquidationPrice;
+                }
             }
         }
         verifiedHedges.push(h);
@@ -97,7 +123,7 @@ export async function handleStatusCommand(hedge) {
             `🛡 **Состояние позиций (${h.legs.length}):**`,
         ];
         for (const leg of summary.legs) {
-            const icon = leg.status === 'critical' ? '🔴' : leg.status === 'warning' ? '🟡' : '🔹';
+            const icon = leg.status === 'critical' ? '🔴' : leg.status === 'warning' ? '🟡' : '🟢';
             const sideName = leg.side === 'long' ? '📈 LONG' : '📉 SHORT';
             const pnlSign = leg.unrealizedPnl >= 0 ? '+' : '';
             lines.push(`${icon} **${leg.name}** [${sideName}]`, `   Маржа: $${leg.margin} (${leg.leverage || 7}x | $${(leg.margin * (leg.leverage || 7)).toFixed(2)} notional | ${leg.size || ''} ${h.symbol})`, `   Вход: $${leg.entryPrice.toFixed(2)} | Ликвидация: **$${leg.liquidationPrice.toFixed(2)}**`, `   Запас хода: **${leg.distanceToLiqPct}%** ($${leg.distanceToLiqUsd}) | PnL: **${pnlSign}$${leg.unrealizedPnl}**`, ``);

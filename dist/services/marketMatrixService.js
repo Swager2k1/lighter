@@ -595,8 +595,8 @@ export async function calculateActiveHedgesExitReport(configOverride) {
         const totalNotional = Math.round(size * markPrice);
         const halfNotional = Math.round(totalNotional / 2);
         const halfSize = parseFloat((size / 2).toFixed(3));
-        const rhLeg = h.legs?.find((l) => l.side === 'short') || h.legs?.[0];
-        const arbLeg = h.legs?.find((l) => l.side === 'long') || h.legs?.[1];
+        const rhLeg = h.legs?.find((l) => l.id?.startsWith('rh_') || !l.name.includes('Core')) || h.legs?.[0];
+        const arbLeg = h.legs?.find((l) => l.id?.startsWith('core_') || l.name.includes('Core')) || h.legs?.[1];
         const rhEntry = rhLeg?.entryPrice || entryPrice;
         const arbEntry = arbLeg?.entryPrice || entryPrice;
         const rhSize = rhLeg?.size || size;
@@ -620,28 +620,41 @@ export async function calculateActiveHedgesExitReport(configOverride) {
             ]);
             const rhAsks = rhOb.asks;
             const arbBids = arbOb.bids;
-            if (rhAsks.length > 0 && arbBids.length > 0) {
-                rhAskPrice = rhAsks[0].price;
-                arbBidPrice = arbBids[0].price;
+            const rhBids = rhOb.bids;
+            const arbAsks = arbOb.asks;
+            const rhIsShort = rhLeg?.side === 'short';
+            const buySideLevels = rhIsShort ? rhAsks : arbAsks;
+            const sellSideLevels = rhIsShort ? arbBids : rhBids;
+            if (buySideLevels.length > 0 && sellSideLevels.length > 0) {
+                rhAskPrice = rhIsShort ? (rhAsks[0]?.price || markPrice) : (rhBids[0]?.price || markPrice);
+                arbBidPrice = rhIsShort ? (arbBids[0]?.price || markPrice) : (arbAsks[0]?.price || markPrice);
                 const walk100 = simulateOrderbookWalk({
                     targetNotional: totalNotional,
-                    sellSideLevels: arbBids,
-                    buySideLevels: rhAsks,
+                    sellSideLevels,
+                    buySideLevels,
                 });
                 loss100Usd = walk100.lossUsd;
                 loss100Pct = walk100.lossPct;
                 const walk50 = simulateOrderbookWalk({
                     targetNotional: halfNotional,
-                    sellSideLevels: arbBids,
-                    buySideLevels: rhAsks,
+                    sellSideLevels,
+                    buySideLevels,
                 });
                 loss50Usd = walk50.lossUsd;
                 loss50Pct = walk50.lossPct;
-                rhPnl100 = parseFloat(((rhEntry - walk100.avgBuyPrice) * rhSize).toFixed(2));
-                arbPnl100 = parseFloat(((walk100.avgSellPrice - arbEntry) * arbSize).toFixed(2));
+                rhPnl100 = parseFloat((rhIsShort
+                    ? (rhEntry - walk100.avgBuyPrice) * rhSize
+                    : (walk100.avgSellPrice - rhEntry) * rhSize).toFixed(2));
+                arbPnl100 = parseFloat((rhIsShort
+                    ? (walk100.avgSellPrice - arbEntry) * arbSize
+                    : (arbEntry - walk100.avgBuyPrice) * arbSize).toFixed(2));
                 netExit100 = parseFloat((rhPnl100 + arbPnl100).toFixed(2));
-                rhPnl50 = parseFloat(((rhEntry - walk50.avgBuyPrice) * (rhSize / 2)).toFixed(2));
-                arbPnl50 = parseFloat(((walk50.avgSellPrice - arbEntry) * (arbSize / 2)).toFixed(2));
+                rhPnl50 = parseFloat((rhIsShort
+                    ? (rhEntry - walk50.avgBuyPrice) * (rhSize / 2)
+                    : (walk50.avgSellPrice - rhEntry) * (rhSize / 2)).toFixed(2));
+                arbPnl50 = parseFloat((rhIsShort
+                    ? (walk50.avgSellPrice - arbEntry) * (arbSize / 2)
+                    : (arbEntry - walk50.avgBuyPrice) * (arbSize / 2)).toFixed(2));
                 netExit50 = parseFloat((rhPnl50 + arbPnl50).toFixed(2));
             }
         }
