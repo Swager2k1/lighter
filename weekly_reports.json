@@ -167,6 +167,48 @@
       "costsUsd": 184.43,
       "costPerPointUsd": 1.68,
       "notes": "14 total opens across 2 wallets. Net realized cost $184.43 for 109.79 pts ($1.68/pt realized, $2.09/pt incl COIN friction). All-time points: 268.90 pts at $0.97/pt all-time. Yield: 6.71 pts/$1k."
+    },
+    {
+      "week": "Week 8 (W1)",
+      "period": "30.10 - 06.11",
+      "wallet": "Wallet 1 (W1)",
+      "rh": "7372.70 -> 6300.34",
+      "core": "5732.03 -> 6815.30",
+      "pts": 86.28,
+      "totalVolume": "587.1k",
+      "oi": "180k-650k",
+      "pairs": "AMD, INTC, CRCL, COIN, XAU",
+      "costsUsd": 130.68,
+      "costPerPointUsd": 1.51,
+      "notes": "W1 high notional hold (AMD, INTC x2, CRCL x2, COIN x2, XAU). Gained +86.28 pts, all-time 250.88 pts. Realized cost $1.51/pt ($0.49/pt post-04.11). Yield: 6.58 pts/$1k."
+    },
+    {
+      "week": "Week 8 (W2)",
+      "period": "30.10 - 06.11",
+      "wallet": "Wallet 2 (W2)",
+      "rh": "2848.53 -> 1359.38",
+      "core": "2039.59 -> 2422.15",
+      "pts": 28.71,
+      "totalVolume": "137.9k",
+      "oi": "250k-500k",
+      "pairs": "AMD, TRX, TSM",
+      "costsUsd": -1.62,
+      "costPerPointUsd": "PROFIT (-$0.06/pt)",
+      "notes": "W2 zero-friction & positive spread swing (AMD, TRX, TSM x3). Gained +28.71 pts, all-time 133.01 pts. Net profit +$1.62 (+9.89 post-04.11). Yield: 7.59 pts/$1k."
+    },
+    {
+      "week": "Week 8 (Portfolio Total)",
+      "period": "30.10 - 06.11",
+      "wallet": "Combined Portfolio (W1 + W2)",
+      "rh": "10221.23 -> 7659.72",
+      "core": "7771.62 -> 9237.45",
+      "pts": 114.99,
+      "totalVolume": "725.0k",
+      "oi": "180k-650k",
+      "pairs": "AMD, INTC, CRCL, TRX, COIN, TSM, XAU",
+      "costsUsd": 129.06,
+      "costPerPointUsd": 1.12,
+      "notes": "13 total closed cycles across 2 wallets. Net realized cost $129.06 for 114.99 pts ($1.12/pt 7d realized, $0.28/pt post-04.11). All-time points: 383.89 pts at $1.02/pt all-time. Yield: 6.81 pts/$1k."
     }
   ]
 }

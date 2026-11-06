@@ -13,10 +13,10 @@ export interface EntryFrictionParams {
 }
 
 export function getCurrentTradingWeek(): { week: string; period: string } {
-  // Текущая неделя цикла в проекте — Week 7 (23.10 - 30.10)
+  // Текущая неделя цикла в проекте — Week 9 (06.11 - 13.11)
   return {
-    week: 'Week 7',
-    period: '23.10 - 30.10',
+    week: 'Week 9',
+    period: '06.11 - 13.11',
   };
 }
 
@@ -226,8 +226,8 @@ export async function activateHedgeOnchain(
     existingHedge?.legs[1]?.entryPrice ||
     rhEntryPrice;
 
-  const rhSide: 'long' | 'short' = rhPos?.side || 'short';
-  const arbSide: 'long' | 'short' = arbPos?.side || 'long';
+  const rhSide: 'long' | 'short' = rhPos?.side || 'long';
+  const arbSide: 'long' | 'short' = arbPos?.side || 'short';
 
   // 5. Определение маржи и плеча:
   // Приоритет: явный manualLeverage -> реальный collateral из ончейна Lighter -> existing -> 7.92x

@@ -4,10 +4,10 @@ import { loadConfig, saveHedgeConfig, deactivateHedge } from '../config.js';
 import { fetchLighterPositions, fetchLighterTicker } from '../connectors/lighter.js';
 import { githubSyncService } from './githubSyncService.js';
 export function getCurrentTradingWeek() {
-    // Текущая неделя цикла в проекте — Week 7 (23.10 - 30.10)
+    // Текущая неделя цикла в проекте — Week 9 (06.11 - 13.11)
     return {
-        week: 'Week 7',
-        period: '23.10 - 30.10',
+        week: 'Week 9',
+        period: '06.11 - 13.11',
     };
 }
 export function calculateEntryFriction(params) {
@@ -165,8 +165,8 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
         (manualPrice ? manualPrice * 1.0005 : undefined) ||
         existingHedge?.legs[1]?.entryPrice ||
         rhEntryPrice;
-    const rhSide = rhPos?.side || 'short';
-    const arbSide = arbPos?.side || 'long';
+    const rhSide = rhPos?.side || 'long';
+    const arbSide = arbPos?.side || 'short';
     // 5. Определение маржи и плеча:
     // Приоритет: явный manualLeverage -> реальный collateral из ончейна Lighter -> existing -> 7.92x
     const notional = size * rhEntryPrice;
