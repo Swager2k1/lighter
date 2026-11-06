@@ -272,7 +272,7 @@
     },
     {
       "symbol": "TSM",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_tsm_short",
@@ -300,7 +300,7 @@
         }
       ],
       "createdAt": 1793747912272,
-      "updatedAt": 1793914130887
+      "updatedAt": 1793965137960
     },
     {
       "symbol": "XAU",
