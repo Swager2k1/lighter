@@ -295,7 +295,7 @@ export async function activateHedgeOnchain(
         walletAddress: targetAddr,
       },
     ],
-    createdAt: existingHedge?.createdAt || Date.now(),
+    createdAt: Date.now(),
     updatedAt: Date.now(),
   };
 

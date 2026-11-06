@@ -147,5 +147,27 @@ test('appendRowToCsv triggers cloud sync without throwing errors', async () => {
   }
 });
 
+test('formatCsvExitRow formats note correctly with realistic duration and prices', () => {
+  const row = formatCsvExitRow({
+    week: 'Week 7',
+    period: '23.10 - 30.10',
+    asset: 'TSM',
+    venue: 'Robinhood + Arbitrum',
+    legDescription: 'TSM Closed Hedge',
+    side: 'Delta-Neutral',
+    entryPrice: 355.88,
+    exitPrice: 378.81,
+    size: 46.5,
+    margin: 85.76,
+    netPnl: 24.17,
+    netBalanceChange: 24.17,
+    notes: 'Closed via /c TSM (12.2ч (с 05.11, 23:28 по 06.11, 11:38). Exit: $378.81, Net PnL: +$24.17)',
+  });
+
+  assert.ok(row.includes('12.2ч'));
+  assert.ok(row.includes('+24.17'));
+});
+
+
 
 
