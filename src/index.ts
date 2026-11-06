@@ -18,7 +18,7 @@ async function main() {
 
   const config = loadConfig();
   const initialHedges = getActiveHedges(config);
-  const symbolsList = initialHedges.map((h) => h.symbol).join(', ');
+  const symbolsList = initialHedges.length > 0 ? initialHedges.map((h) => h.symbol).join(', ') : 'нет (все связки закрыты)';
 
   console.log(`📌 Активные рынки: ${symbolsList}`);
   console.log(`⏱ Интервал опроса публичных цен: ${config.pollIntervalMs / 1000} сек`);
@@ -38,7 +38,9 @@ async function main() {
   if (config.telegram.chatId && config.telegram.botToken) {
     await bot.sendMessage(
       config.telegram.chatId,
-      `🟢 **Монитор запущен!**\nАктивные рынки: **${symbolsList}**\nДля проверки введите \`/status\` или \`/help\`.`
+      initialHedges.length > 0
+        ? `🟢 **Монитор запущен!**\nАктивные рынки: **${symbolsList}**\nДля проверки введите \`/status\` или \`/help\`.`
+        : `🟢 **Монитор запущен в режиме ожидания!**\nВсе связки закрыты. Для подбора пар нажмите **📈 Анализ входа (/o)**.`
     );
   }
 
@@ -63,53 +65,60 @@ async function main() {
       const thresholds = currentConfig.thresholds;
       const activeHedges = getActiveHedges(currentConfig);
 
-      for (const hedge of activeHedges) {
-        // 1. Анонимный опрос публичных цен
-        const market = await getMarketInfo(hedge.symbol);
+      if (activeHedges.length === 0) {
+        if (cycleCount % 4 === 0) {
+          const time = new Date().toLocaleTimeString();
+          console.log(`[${time}] 💤 Нет активных открытых позиций. Мониторинг в режиме ожидания...`);
+        }
+      } else {
+        for (const hedge of activeHedges) {
+          // 1. Анонимный опрос публичных цен
+          const market = await getMarketInfo(hedge.symbol);
 
-        if (market && market.lighterMarkPrice > 0) {
-          // 2. Проверка на сквизы
-          const spike = globalSpikeDetector.addTick(
-            hedge.symbol,
-            market.lighterMarkPrice,
-            thresholds
-          );
-
-          if (spike) {
-            console.warn(`[СКВИЗ] Обнаружен скачок цены ${spike.symbol}: ${spike.changePct}% за ${spike.windowMinutes}м`);
-            await bot.dispatchSpikeAlert(spike);
-          }
-
-          // 3. Оценка риска связки
-          const summary = evaluateHedgeRisk(
-            hedge,
-            {
-              lighterPrice: market.lighterMarkPrice,
-              polymarketPrice: market.polymarketMarkPrice,
-            },
-            thresholds.warningBufferPct,
-            thresholds.criticalBufferPct
-          );
-
-          // 4. Диспетчеризация алертов
-          // Основной бот (инфо/предупреждения, звук отключен)
-          await bot.dispatchRiskAlerts(summary.legs, hedge.symbol);
-
-          // Критический бот (только угрозы: <= 2.5%, шаг 0.25%, сирена <= 1.5%)
-          if (criticalBot.isConfigured()) {
-            await criticalBot.dispatchCriticalAlerts(summary.legs, hedge.symbol);
-          }
-
-          // Лог состояния в консоль каждые 4 цикла (~1 минута)
-          if (cycleCount % 4 === 0) {
-            const time = new Date().toLocaleTimeString();
-            const lowest = summary.lowestBufferLeg;
-            const pnlSign = summary.totalUnrealizedPnl >= 0 ? '+' : '';
-            console.log(
-              `[${time}] ${hedge.symbol}: RH $${market.lighterMarkPrice.toFixed(2)} | ` +
-              `Мин. буфер: ${lowest.name} (${lowest.distanceToLiqPct}%) | ` +
-              `PnL: ${pnlSign}$${summary.totalUnrealizedPnl} | Дельта: $${summary.netDeltaUsd}`
+          if (market && market.lighterMarkPrice > 0) {
+            // 2. Проверка на сквизы
+            const spike = globalSpikeDetector.addTick(
+              hedge.symbol,
+              market.lighterMarkPrice,
+              thresholds
             );
+
+            if (spike) {
+              console.warn(`[СКВИЗ] Обнаружен скачок цены ${spike.symbol}: ${spike.changePct}% за ${spike.windowMinutes}м`);
+              await bot.dispatchSpikeAlert(spike);
+            }
+
+            // 3. Оценка риска связки
+            const summary = evaluateHedgeRisk(
+              hedge,
+              {
+                lighterPrice: market.lighterMarkPrice,
+                polymarketPrice: market.polymarketMarkPrice,
+              },
+              thresholds.warningBufferPct,
+              thresholds.criticalBufferPct
+            );
+
+            // 4. Диспетчеризация алертов
+            // Основной бот (инфо/предупреждения, звук отключен)
+            await bot.dispatchRiskAlerts(summary.legs, hedge.symbol);
+
+            // Критический бот (только угрозы: <= 2.5%, шаг 0.25%, сирена <= 1.5%)
+            if (criticalBot.isConfigured()) {
+              await criticalBot.dispatchCriticalAlerts(summary.legs, hedge.symbol);
+            }
+
+            // Лог состояния в консоль каждые 4 цикла (~1 минута)
+            if (cycleCount % 4 === 0) {
+              const time = new Date().toLocaleTimeString();
+              const lowest = summary.lowestBufferLeg;
+              const pnlSign = summary.totalUnrealizedPnl >= 0 ? '+' : '';
+              console.log(
+                `[${time}] ${hedge.symbol}: RH $${market.lighterMarkPrice.toFixed(2)} | ` +
+                `Мин. буфер: ${lowest.name} (${lowest.distanceToLiqPct}%) | ` +
+                `PnL: ${pnlSign}$${summary.totalUnrealizedPnl} | Дельта: $${summary.netDeltaUsd}`
+              );
+            }
           }
         }
       }

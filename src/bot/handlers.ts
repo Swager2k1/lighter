@@ -3,7 +3,7 @@ import { getMarketInfo, scanSharedMarkets } from '../services/marketScanner.js';
 import { evaluateHedgeRisk } from '../services/riskEngine.js';
 import { calculateSafeLeverage } from '../services/calculator.js';
 import { fetchLighterPositions } from '../connectors/lighter.js';
-import { loadConfig, saveHedgeConfig, updateWallets, getActiveHedges, deactivateHedge } from '../config.js';
+import { loadConfig, saveHedgeConfig, updateWallets, getActiveHedges, deactivateHedge, FullConfig } from '../config.js';
 import { sleep, sleepByRange, getRandomNumber } from '../utils/sleep.js';
 import { fetchLiveWalletEquity, calculateWalletRebalance, formatRebalanceReport, RebalanceResult } from '../services/rebalanceService.js';
 import { scanCanonicalMarketMatrix, calculateActiveHedgesExitReport } from '../services/marketMatrixService.js';
@@ -24,8 +24,11 @@ export async function handleStatusCommand(hedge?: ThreeLegHedge): Promise<string
     liquidationPrice?: number;
     allocatedMargin?: number;
     accountCollateral?: number;
+    walletAddress?: string;
+    venueType?: 'rh' | 'arb';
   }> = [];
 
+  let onchainSuccess = false;
   try {
     const [w1Rh, w1Arb, w2Rh, w2Arb] = await Promise.all([
       w1 ? fetchLighterPositions(w1, 'rh') : Promise.resolve([]),
@@ -33,7 +36,13 @@ export async function handleStatusCommand(hedge?: ThreeLegHedge): Promise<string
       w2 ? fetchLighterPositions(w2, 'rh') : Promise.resolve([]),
       w2 ? fetchLighterPositions(w2, 'arb') : Promise.resolve([]),
     ]);
-    onchainPositions = [...w1Rh, ...w1Arb, ...w2Rh, ...w2Arb];
+    onchainPositions = [
+      ...w1Rh.map((p) => ({ ...p, walletAddress: w1, venueType: 'rh' as const })),
+      ...w1Arb.map((p) => ({ ...p, walletAddress: w1, venueType: 'arb' as const })),
+      ...w2Rh.map((p) => ({ ...p, walletAddress: w2, venueType: 'rh' as const })),
+      ...w2Arb.map((p) => ({ ...p, walletAddress: w2, venueType: 'arb' as const })),
+    ];
+    onchainSuccess = true;
   } catch (err) {
     console.error('[StatusCommand] Ошибка опроса ончейн-позиций:', err);
   }
@@ -49,27 +58,51 @@ export async function handleStatusCommand(hedge?: ThreeLegHedge): Promise<string
   const verifiedHedges: ThreeLegHedge[] = [];
   for (const h of rawHedges) {
     const sym = h.symbol.toUpperCase();
-    if (liveOnchainSymbols.size > 0 && !liveOnchainSymbols.has(sym)) {
+    if (onchainSuccess && !liveOnchainSymbols.has(sym)) {
       console.warn(`[Auto-Sync] Связка ${sym} отсутствует в ончейне (закрыта). Автоматически деактивирую.`);
       deactivateHedge(sym);
       continue;
     }
 
     // Если позиция есть в ончейне, актуализируем данные ног:
-    const rhPos = onchainPositions.find((p) => p.symbol.toUpperCase() === sym && p.side === 'short');
-    if (rhPos && rhPos.size > 0) {
-      if (h.legs[0]) {
-        h.legs[0].size = rhPos.size;
-        h.legs[0].entryPrice = rhPos.entryPrice;
-        if (rhPos.liquidationPrice) h.legs[0].liquidationPrice = rhPos.liquidationPrice;
+    // Сопоставляем каждую ногу по её целевой площадке (rh/arb), адресу кошелька и стороне (long/short)
+    for (const leg of h.legs) {
+      const isArb = leg.id?.startsWith('core_') || leg.name?.includes('Core');
+      const targetVenue: 'rh' | 'arb' = isArb ? 'arb' : 'rh';
+
+      // 1. Точное совпадение: символ + venueType + walletAddress + side
+      let matchedPos = onchainPositions.find((p) => {
+        if (p.symbol.toUpperCase() !== sym) return false;
+        if (leg.walletAddress && p.walletAddress && p.walletAddress.toLowerCase() !== leg.walletAddress.toLowerCase()) {
+          return false;
+        }
+        if (p.venueType && p.venueType !== targetVenue) return false;
+        return p.side === leg.side;
+      });
+
+      // 2. Fallback: совпадение по символу + venueType + walletAddress
+      if (!matchedPos) {
+        matchedPos = onchainPositions.find((p) => {
+          if (p.symbol.toUpperCase() !== sym) return false;
+          if (leg.walletAddress && p.walletAddress && p.walletAddress.toLowerCase() !== leg.walletAddress.toLowerCase()) {
+            return false;
+          }
+          return p.venueType === targetVenue;
+        });
       }
-    }
-    const arbPos = onchainPositions.find((p) => p.symbol.toUpperCase() === sym && p.side === 'long');
-    if (arbPos && arbPos.size > 0) {
-      if (h.legs[1]) {
-        h.legs[1].size = arbPos.size;
-        h.legs[1].entryPrice = arbPos.entryPrice;
-        if (arbPos.liquidationPrice) h.legs[1].liquidationPrice = arbPos.liquidationPrice;
+
+      // 3. Fallback: совпадение по символу + side
+      if (!matchedPos) {
+        matchedPos = onchainPositions.find((p) => p.symbol.toUpperCase() === sym && p.side === leg.side);
+      }
+
+      if (matchedPos && matchedPos.size > 0) {
+        leg.size = matchedPos.size;
+        leg.entryPrice = matchedPos.entryPrice;
+        leg.side = matchedPos.side;
+        if (matchedPos.liquidationPrice) {
+          leg.liquidationPrice = matchedPos.liquidationPrice;
+        }
       }
     }
 
@@ -125,7 +158,7 @@ export async function handleStatusCommand(hedge?: ThreeLegHedge): Promise<string
     ];
 
     for (const leg of summary.legs) {
-      const icon = leg.status === 'critical' ? '🔴' : leg.status === 'warning' ? '🟡' : '🔹';
+      const icon = leg.status === 'critical' ? '🔴' : leg.status === 'warning' ? '🟡' : '🟢';
       const sideName = leg.side === 'long' ? '📈 LONG' : '📉 SHORT';
       const pnlSign = leg.unrealizedPnl >= 0 ? '+' : '';
 
@@ -454,11 +487,11 @@ export async function handleMarketMatrixCommand(
   return scanCanonicalMarketMatrix(mode, targetWallet);
 }
 
-export async function handleActiveHedgesExitCommand(): Promise<{
+export async function handleActiveHedgesExitCommand(configOverride?: FullConfig): Promise<{
   text: string;
   inlineKeyboard?: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
 }> {
-  return calculateActiveHedgesExitReport();
+  return calculateActiveHedgesExitReport(configOverride);
 }
 
 export { activateHedgeOnchain, deactivateHedgeOnchain, parseOpenCommandArgs, parseCloseCommandArgs, getCurrentTradingWeek };

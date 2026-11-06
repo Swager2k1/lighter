@@ -13,6 +13,7 @@ export async function handleStatusCommand(hedge) {
     const w2 = config.wallets.robinhoodWallet2?.trim();
     // 1. Онлайн-сверка с блокчейном Lighter (проверяем реальные открытые позиции)
     let onchainPositions = [];
+    let onchainSuccess = false;
     try {
         const [w1Rh, w1Arb, w2Rh, w2Arb] = await Promise.all([
             w1 ? fetchLighterPositions(w1, 'rh') : Promise.resolve([]),
@@ -21,6 +22,7 @@ export async function handleStatusCommand(hedge) {
             w2 ? fetchLighterPositions(w2, 'arb') : Promise.resolve([]),
         ]);
         onchainPositions = [...w1Rh, ...w1Arb, ...w2Rh, ...w2Arb];
+        onchainSuccess = true;
     }
     catch (err) {
         console.error('[StatusCommand] Ошибка опроса ончейн-позиций:', err);
@@ -32,7 +34,7 @@ export async function handleStatusCommand(hedge) {
     const verifiedHedges = [];
     for (const h of rawHedges) {
         const sym = h.symbol.toUpperCase();
-        if (liveOnchainSymbols.size > 0 && !liveOnchainSymbols.has(sym)) {
+        if (onchainSuccess && !liveOnchainSymbols.has(sym)) {
             console.warn(`[Auto-Sync] Связка ${sym} отсутствует в ончейне (закрыта). Автоматически деактивирую.`);
             deactivateHedge(sym);
             continue;
@@ -347,7 +349,7 @@ export async function handleRebalanceCommand(targetWalletArg) {
 export async function handleMarketMatrixCommand(mode = 'open', targetWallet) {
     return scanCanonicalMarketMatrix(mode, targetWallet);
 }
-export async function handleActiveHedgesExitCommand() {
-    return calculateActiveHedgesExitReport();
+export async function handleActiveHedgesExitCommand(configOverride) {
+    return calculateActiveHedgesExitReport(configOverride);
 }
 export { activateHedgeOnchain, deactivateHedgeOnchain, parseOpenCommandArgs, parseCloseCommandArgs, getCurrentTradingWeek };

@@ -1,6 +1,6 @@
 import { getEarningsInfo, getReportingWeekInterval } from './calendarService.js';
 import { fetchLiveWalletEquity } from './rebalanceService.js';
-import { loadConfig, getActiveHedges } from '../config.js';
+import { loadConfig, getActiveHedges, FullConfig } from '../config.js';
 
 export interface OrderbookLevel {
   price: number;
@@ -181,31 +181,29 @@ export function validateMarketHedgeability(params: HedgeabilityParams): { isHedg
 
 export function sortMarketMatrixRows(rows: MarketMatrixRow[]): MarketMatrixRow[] {
   return [...rows].sort((a, b) => {
-    // 1. Активы с бустом (🔥 отчет недели или новый листинг) идут на самом верху
+    // 1. Секция бустов (🔥 отчет недели или новый листинг) идет на самом верху
     if (a.hasEarningsBoost && !b.hasEarningsBoost) return -1;
     if (!a.hasEarningsBoost && b.hasEarningsBoost) return 1;
 
+    // Внутри бустов: фильтр по WOS Market 100% от самых низких затрат к самым высоким
     if (a.hasEarningsBoost && b.hasEarningsBoost) {
-      // Внутри бустов: сначала акции, затем остальные
-      if (a.isStock && !b.isStock) return -1;
-      if (!a.isStock && b.isStock) return 1;
-      // Сортировка по минимальному loss100Pct
-      if (Math.abs(a.loss100Pct - b.loss100Pct) > 0.005) {
+      if (Math.abs(a.loss100Pct - b.loss100Pct) > 1e-5) {
         return a.loss100Pct - b.loss100Pct;
       }
       return a.oiRobinhoodUsd - b.oiRobinhoodUsd;
     }
 
-    // 2. Все Акции идут перед остальными рынками
+    // 2. Секция Акций (без буста) идет перед остальными рынками
     if (a.isStock && !b.isStock) return -1;
     if (!a.isStock && b.isStock) return 1;
 
-    // 3. Внутри категории: сначала фильтрация/ранжирование по минимальному lossMarket 100%
-    if (Math.abs(a.loss100Pct - b.loss100Pct) > 0.005) {
+    // 3. Внутри категории (акции без буста ИЛИ другие рынки без буста):
+    // Фильтр по WOS Market 100% от самых низких затрат к самым высоким
+    if (Math.abs(a.loss100Pct - b.loss100Pct) > 1e-5) {
       return a.loss100Pct - b.loss100Pct;
     }
 
-    // 4. При близком лоссе — по возрастанию Robinhood OI (максимальный фарминг поинтов)
+    // При строго одинаковом лоссе — по возрастанию Robinhood OI
     return a.oiRobinhoodUsd - b.oiRobinhoodUsd;
   });
 }
@@ -349,18 +347,41 @@ export function formatTopCardsMessage(params: {
 }
 
 export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: DynamicNotionalSizing): string {
-  const stocks = rows.filter((r) => r.isStock);
-  const otherMarkets = rows.filter((r) => !r.isStock);
+  // 1. Разделение на три секции: Бусты -> Акции (без буста) -> Другие рынки (без буста)
+  const boosts = rows.filter((r) => r.hasEarningsBoost);
+  const stocks = rows.filter((r) => r.isStock && !r.hasEarningsBoost);
+  const otherMarkets = rows.filter((r) => !r.isStock && !r.hasEarningsBoost);
 
-  const formatRow = (r: MarketMatrixRow, index: number) => {
+  // Каждая секция упорядочена от самых низких затрат к самым высоким (по WOS Market 100%)
+  const sortedBoosts = [...boosts].sort((a, b) => a.loss100Pct - b.loss100Pct || a.oiRobinhoodUsd - b.oiRobinhoodUsd);
+  const sortedStocks = [...stocks].sort((a, b) => a.loss100Pct - b.loss100Pct || a.oiRobinhoodUsd - b.oiRobinhoodUsd);
+  const sortedOther = [...otherMarkets].sort((a, b) => a.loss100Pct - b.loss100Pct || a.oiRobinhoodUsd - b.oiRobinhoodUsd);
+
+  const orderedMarkets = [...sortedBoosts, ...sortedStocks, ...sortedOther];
+
+  const formatRow = (
+    r: MarketMatrixRow,
+    index: number,
+    sectionType?: 'boosts' | 'stocks' | 'other' | 'all'
+  ) => {
     const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)} (+${Math.abs(r.loss100Pct)}%)` : `-$${r.loss100Usd} (${r.loss100Pct}%)`;
     const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)} (+${Math.abs(r.loss50Pct)}%)` : `-$${r.loss50Usd} (${r.loss50Pct}%)`;
 
     let divider: string | null = null;
-    if (index === 0 && r.isStock) {
+    if (sectionType === 'all') {
+      if (index === 0 && sortedBoosts.length > 0) {
+        divider = '══════════ СЕКЦИЯ БУСТОВ НЕДЕЛИ (BOOSTS) ══════════';
+      } else if (index === sortedBoosts.length && sortedStocks.length > 0) {
+        divider = '══════════ СЕКЦИЯ АКЦИЙ (STOCKS) ══════════';
+      } else if (index === sortedBoosts.length + sortedStocks.length && sortedOther.length > 0) {
+        divider = '══════════ ДРУГИЕ РЫНКИ (CRYPTO / ETF / COMMODITIES / PRE-IPO) ══════════';
+      }
+    } else if (sectionType === 'boosts' && index === 0) {
+      divider = '══════════ СЕКЦИЯ БУСТОВ НЕДЕЛИ (BOOSTS) ══════════';
+    } else if (sectionType === 'stocks' && index === 0) {
       divider = '══════════ СЕКЦИЯ АКЦИЙ (STOCKS) ══════════';
-    } else if (index === stocks.length && !r.isStock) {
-      divider = '══════════ ДРУГИЕ РЫНКИ (CRYPTO / ETF / COMMODITIES) ══════════';
+    } else if (sectionType === 'other' && index === 0) {
+      divider = '══════════ ДРУГИЕ РЫНКИ (CRYPTO / ETF / COMMODITIES / PRE-IPO) ══════════';
     }
 
     return {
@@ -390,12 +411,14 @@ export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: Dynam
     portfolio_equity_usd: sizing.totalEquity,
     notional_100pct_7x_usd: sizing.notional100Pct,
     notional_50pct_7x_usd: sizing.notional50Pct,
-    total_markets: rows.length,
-    total_stocks: stocks.length,
-    total_other_markets: otherMarkets.length,
-    stocks_section: stocks.map((r, idx) => formatRow(r, idx)),
-    other_markets_section: otherMarkets.map((r, idx) => formatRow(r, idx)),
-    markets: rows.map((r, idx) => formatRow(r, idx)),
+    total_markets: orderedMarkets.length,
+    total_boosts: sortedBoosts.length,
+    total_stocks: sortedStocks.length,
+    total_other_markets: sortedOther.length,
+    boosts_section: sortedBoosts.map((r, idx) => formatRow(r, idx, 'boosts')),
+    stocks_section: sortedStocks.map((r, idx) => formatRow(r, idx, 'stocks')),
+    other_markets_section: sortedOther.map((r, idx) => formatRow(r, idx, 'other')),
+    markets: orderedMarkets.map((r, idx) => formatRow(r, idx, 'all')),
   };
 
   return JSON.stringify(data, null, 2);
@@ -737,11 +760,11 @@ export async function scanCanonicalMarketMatrix(
   return { topCardsText, fileContent };
 }
 
-export async function calculateActiveHedgesExitReport(): Promise<{
+export async function calculateActiveHedgesExitReport(configOverride?: FullConfig): Promise<{
   text: string;
   inlineKeyboard?: { inline_keyboard: Array<Array<{ text: string; callback_data: string }>> };
 }> {
-  const config = loadConfig();
+  const config = configOverride || loadConfig();
   const activeHedges = getActiveHedges(config);
 
   if (activeHedges.length === 0) {
@@ -801,8 +824,8 @@ export async function calculateActiveHedgesExitReport(): Promise<{
     const halfNotional = Math.round(totalNotional / 2);
     const halfSize = parseFloat((size / 2).toFixed(3));
 
-    const rhLeg = h.legs?.find((l) => l.side === 'short') || h.legs?.[0];
-    const arbLeg = h.legs?.find((l) => l.side === 'long') || h.legs?.[1];
+    const rhLeg = h.legs?.find((l) => l.id?.startsWith('rh_') || !l.name.includes('Core')) || h.legs?.[0];
+    const arbLeg = h.legs?.find((l) => l.id?.startsWith('core_') || l.name.includes('Core')) || h.legs?.[1];
 
     const rhEntry = rhLeg?.entryPrice || entryPrice;
     const arbEntry = arbLeg?.entryPrice || entryPrice;
@@ -831,33 +854,59 @@ export async function calculateActiveHedgesExitReport(): Promise<{
 
       const rhAsks = rhOb.asks;
       const arbBids = arbOb.bids;
+      const rhBids = rhOb.bids;
+      const arbAsks = arbOb.asks;
 
-      if (rhAsks.length > 0 && arbBids.length > 0) {
-        rhAskPrice = rhAsks[0].price;
-        arbBidPrice = arbBids[0].price;
+      const rhIsShort = rhLeg?.side === 'short';
+      const buySideLevels = rhIsShort ? rhAsks : arbAsks;
+      const sellSideLevels = rhIsShort ? arbBids : rhBids;
+
+      if (buySideLevels.length > 0 && sellSideLevels.length > 0) {
+        rhAskPrice = rhIsShort ? (rhAsks[0]?.price || markPrice) : (rhBids[0]?.price || markPrice);
+        arbBidPrice = rhIsShort ? (arbBids[0]?.price || markPrice) : (arbAsks[0]?.price || markPrice);
 
         const walk100 = simulateOrderbookWalk({
           targetNotional: totalNotional,
-          sellSideLevels: arbBids,
-          buySideLevels: rhAsks,
+          sellSideLevels,
+          buySideLevels,
         });
         loss100Usd = walk100.lossUsd;
         loss100Pct = walk100.lossPct;
 
         const walk50 = simulateOrderbookWalk({
           targetNotional: halfNotional,
-          sellSideLevels: arbBids,
-          buySideLevels: rhAsks,
+          sellSideLevels,
+          buySideLevels,
         });
         loss50Usd = walk50.lossUsd;
         loss50Pct = walk50.lossPct;
 
-        rhPnl100 = parseFloat(((rhEntry - walk100.avgBuyPrice) * rhSize).toFixed(2));
-        arbPnl100 = parseFloat(((walk100.avgSellPrice - arbEntry) * arbSize).toFixed(2));
+        rhPnl100 = parseFloat(
+          (rhIsShort
+            ? (rhEntry - walk100.avgBuyPrice) * rhSize
+            : (walk100.avgSellPrice - rhEntry) * rhSize
+          ).toFixed(2)
+        );
+        arbPnl100 = parseFloat(
+          (rhIsShort
+            ? (walk100.avgSellPrice - arbEntry) * arbSize
+            : (arbEntry - walk100.avgBuyPrice) * arbSize
+          ).toFixed(2)
+        );
         netExit100 = parseFloat((rhPnl100 + arbPnl100).toFixed(2));
 
-        rhPnl50 = parseFloat(((rhEntry - walk50.avgBuyPrice) * (rhSize / 2)).toFixed(2));
-        arbPnl50 = parseFloat(((walk50.avgSellPrice - arbEntry) * (arbSize / 2)).toFixed(2));
+        rhPnl50 = parseFloat(
+          (rhIsShort
+            ? (rhEntry - walk50.avgBuyPrice) * (rhSize / 2)
+            : (walk50.avgSellPrice - rhEntry) * (rhSize / 2)
+          ).toFixed(2)
+        );
+        arbPnl50 = parseFloat(
+          (rhIsShort
+            ? (walk50.avgSellPrice - arbEntry) * (arbSize / 2)
+            : (arbEntry - walk50.avgBuyPrice) * (arbSize / 2)
+          ).toFixed(2)
+        );
         netExit50 = parseFloat((rhPnl50 + arbPnl50).toFixed(2));
       }
     }

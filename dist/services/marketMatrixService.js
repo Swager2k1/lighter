@@ -101,33 +101,29 @@ export function validateMarketHedgeability(params) {
 }
 export function sortMarketMatrixRows(rows) {
     return [...rows].sort((a, b) => {
-        // 1. Активы с бустом (🔥 отчет недели или новый листинг) идут на самом верху
+        // 1. Секция бустов (🔥 отчет недели или новый листинг) идет на самом верху
         if (a.hasEarningsBoost && !b.hasEarningsBoost)
             return -1;
         if (!a.hasEarningsBoost && b.hasEarningsBoost)
             return 1;
+        // Внутри бустов: фильтр по WOS Market 100% от самых низких затрат к самым высоким
         if (a.hasEarningsBoost && b.hasEarningsBoost) {
-            // Внутри бустов: сначала акции, затем остальные
-            if (a.isStock && !b.isStock)
-                return -1;
-            if (!a.isStock && b.isStock)
-                return 1;
-            // Сортировка по минимальному loss100Pct
-            if (Math.abs(a.loss100Pct - b.loss100Pct) > 0.005) {
+            if (Math.abs(a.loss100Pct - b.loss100Pct) > 1e-5) {
                 return a.loss100Pct - b.loss100Pct;
             }
             return a.oiRobinhoodUsd - b.oiRobinhoodUsd;
         }
-        // 2. Все Акции идут перед остальными рынками
+        // 2. Секция Акций (без буста) идет перед остальными рынками
         if (a.isStock && !b.isStock)
             return -1;
         if (!a.isStock && b.isStock)
             return 1;
-        // 3. Внутри категории: сначала фильтрация/ранжирование по минимальному lossMarket 100%
-        if (Math.abs(a.loss100Pct - b.loss100Pct) > 0.005) {
+        // 3. Внутри категории (акции без буста ИЛИ другие рынки без буста):
+        // Фильтр по WOS Market 100% от самых низких затрат к самым высоким
+        if (Math.abs(a.loss100Pct - b.loss100Pct) > 1e-5) {
             return a.loss100Pct - b.loss100Pct;
         }
-        // 4. При близком лоссе — по возрастанию Robinhood OI (максимальный фарминг поинтов)
+        // При строго одинаковом лоссе — по возрастанию Robinhood OI
         return a.oiRobinhoodUsd - b.oiRobinhoodUsd;
     });
 }
@@ -240,17 +236,38 @@ export function formatTopCardsMessage(params) {
     return lines.join('\n');
 }
 export function generateCanonicalJsonFile(rows, sizing) {
-    const stocks = rows.filter((r) => r.isStock);
-    const otherMarkets = rows.filter((r) => !r.isStock);
-    const formatRow = (r, index) => {
+    // 1. Разделение на три секции: Бусты -> Акции (без буста) -> Другие рынки (без буста)
+    const boosts = rows.filter((r) => r.hasEarningsBoost);
+    const stocks = rows.filter((r) => r.isStock && !r.hasEarningsBoost);
+    const otherMarkets = rows.filter((r) => !r.isStock && !r.hasEarningsBoost);
+    // Каждая секция упорядочена от самых низких затрат к самым высоким (по WOS Market 100%)
+    const sortedBoosts = [...boosts].sort((a, b) => a.loss100Pct - b.loss100Pct || a.oiRobinhoodUsd - b.oiRobinhoodUsd);
+    const sortedStocks = [...stocks].sort((a, b) => a.loss100Pct - b.loss100Pct || a.oiRobinhoodUsd - b.oiRobinhoodUsd);
+    const sortedOther = [...otherMarkets].sort((a, b) => a.loss100Pct - b.loss100Pct || a.oiRobinhoodUsd - b.oiRobinhoodUsd);
+    const orderedMarkets = [...sortedBoosts, ...sortedStocks, ...sortedOther];
+    const formatRow = (r, index, sectionType) => {
         const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)} (+${Math.abs(r.loss100Pct)}%)` : `-$${r.loss100Usd} (${r.loss100Pct}%)`;
         const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)} (+${Math.abs(r.loss50Pct)}%)` : `-$${r.loss50Usd} (${r.loss50Pct}%)`;
         let divider = null;
-        if (index === 0 && r.isStock) {
+        if (sectionType === 'all') {
+            if (index === 0 && sortedBoosts.length > 0) {
+                divider = '══════════ СЕКЦИЯ БУСТОВ НЕДЕЛИ (BOOSTS) ══════════';
+            }
+            else if (index === sortedBoosts.length && sortedStocks.length > 0) {
+                divider = '══════════ СЕКЦИЯ АКЦИЙ (STOCKS) ══════════';
+            }
+            else if (index === sortedBoosts.length + sortedStocks.length && sortedOther.length > 0) {
+                divider = '══════════ ДРУГИЕ РЫНКИ (CRYPTO / ETF / COMMODITIES / PRE-IPO) ══════════';
+            }
+        }
+        else if (sectionType === 'boosts' && index === 0) {
+            divider = '══════════ СЕКЦИЯ БУСТОВ НЕДЕЛИ (BOOSTS) ══════════';
+        }
+        else if (sectionType === 'stocks' && index === 0) {
             divider = '══════════ СЕКЦИЯ АКЦИЙ (STOCKS) ══════════';
         }
-        else if (index === stocks.length && !r.isStock) {
-            divider = '══════════ ДРУГИЕ РЫНКИ (CRYPTO / ETF / COMMODITIES) ══════════';
+        else if (sectionType === 'other' && index === 0) {
+            divider = '══════════ ДРУГИЕ РЫНКИ (CRYPTO / ETF / COMMODITIES / PRE-IPO) ══════════';
         }
         return {
             ...(divider ? { divider } : {}),
@@ -278,12 +295,14 @@ export function generateCanonicalJsonFile(rows, sizing) {
         portfolio_equity_usd: sizing.totalEquity,
         notional_100pct_7x_usd: sizing.notional100Pct,
         notional_50pct_7x_usd: sizing.notional50Pct,
-        total_markets: rows.length,
-        total_stocks: stocks.length,
-        total_other_markets: otherMarkets.length,
-        stocks_section: stocks.map((r, idx) => formatRow(r, idx)),
-        other_markets_section: otherMarkets.map((r, idx) => formatRow(r, idx)),
-        markets: rows.map((r, idx) => formatRow(r, idx)),
+        total_markets: orderedMarkets.length,
+        total_boosts: sortedBoosts.length,
+        total_stocks: sortedStocks.length,
+        total_other_markets: sortedOther.length,
+        boosts_section: sortedBoosts.map((r, idx) => formatRow(r, idx, 'boosts')),
+        stocks_section: sortedStocks.map((r, idx) => formatRow(r, idx, 'stocks')),
+        other_markets_section: sortedOther.map((r, idx) => formatRow(r, idx, 'other')),
+        markets: orderedMarkets.map((r, idx) => formatRow(r, idx, 'all')),
     };
     return JSON.stringify(data, null, 2);
 }
@@ -525,8 +544,8 @@ export async function scanCanonicalMarketMatrix(mode = 'open', targetWalletArg) 
     const fileContent = generateCanonicalMarkdownFile(sortedRows, sizing);
     return { topCardsText, fileContent };
 }
-export async function calculateActiveHedgesExitReport() {
-    const config = loadConfig();
+export async function calculateActiveHedgesExitReport(configOverride) {
+    const config = configOverride || loadConfig();
     const activeHedges = getActiveHedges(config);
     if (activeHedges.length === 0) {
         return {

@@ -135,27 +135,75 @@ test('sortMarketMatrixRows prioritizes Boost -> Stocks (by loss100Pct) -> Other 
     verdict: 'БИТЬ МАРКЕТОМ (🔥 Буст листинга)',
   };
 
-  const rows = [rowCrypto, rowStockHighLoss, rowStockLowLoss, rowBoostListing];
+  const rowBoostCryptoLowLoss: MarketMatrixRow = {
+    symbol: 'ZRO',
+    type: 'Crypto',
+    isStock: false,
+    earningsText: '🔥 НОВЫЙ ЛИСТИНГ',
+    hasEarningsBoost: true,
+    daysUntilEarnings: 0,
+    loss100Usd: 5,
+    loss100Pct: 0.02, // Меньший лосс чем у BMNR
+    loss50Usd: 2.5,
+    loss50Pct: 0.02,
+    oiRobinhoodUsd: 60000,
+    oiArbitrumUsd: 120000,
+    wallRhL1: '$1.6',
+    wallRhL2: '—',
+    wallArbL1: '$1.61',
+    wallArbL2: '—',
+    maxEntryWallUsd: 8000,
+    edgeSpreadPct: 0.02,
+    macroRisk: '🟢 Стабильно',
+    verdict: 'БИТЬ МАРКЕТОМ',
+  };
+
+  const rows = [rowCrypto, rowStockHighLoss, rowStockLowLoss, rowBoostListing, rowBoostCryptoLowLoss];
   const sorted = sortMarketMatrixRows(rows);
 
-  // 1-й: Буст (BMNR)
-  assert.equal(sorted[0].symbol, 'BMNR');
-  // 2-й: Акция с меньшим лоссом (AAPL: 0.03% vs TSLA: 0.10%)
-  assert.equal(sorted[1].symbol, 'AAPL');
-  // 3-й: Акция со следующим лоссом (TSLA)
-  assert.equal(sorted[2].symbol, 'TSLA');
-  // 4-й: Крипто (BTC) идет после всех акций
-  assert.equal(sorted[3].symbol, 'BTC');
+  // 1-й: Буст с меньшим лоссом (ZRO: 0.02% vs BMNR: 0.06%)
+  assert.equal(sorted[0].symbol, 'ZRO');
+  // 2-й: Следующий буст (BMNR)
+  assert.equal(sorted[1].symbol, 'BMNR');
+  // 3-й: Акция с меньшим лоссом (AAPL: 0.03% vs TSLA: 0.10%)
+  assert.equal(sorted[2].symbol, 'AAPL');
+  // 4-й: Акция со следующим лоссом (TSLA)
+  assert.equal(sorted[3].symbol, 'TSLA');
+  // 5-й: Крипто (BTC) идет после всех акций
+  assert.equal(sorted[4].symbol, 'BTC');
 });
 
-test('generateCanonicalJsonFile produces valid structured JSON with stocks and other sections', () => {
+test('generateCanonicalJsonFile produces valid structured JSON with boosts, stocks and other sections', () => {
+  const sampleBoost: MarketMatrixRow = {
+    symbol: 'BMNR',
+    type: 'Stock',
+    isStock: true,
+    earningsText: '🔥 НОВЫЙ ЛИСТИНГ',
+    hasEarningsBoost: true,
+    daysUntilEarnings: 0,
+    loss100Usd: 15.0,
+    loss100Pct: 0.04,
+    loss50Usd: 7.5,
+    loss50Pct: 0.04,
+    oiRobinhoodUsd: 200000,
+    oiArbitrumUsd: 400000,
+    wallRhL1: '$18',
+    wallRhL2: '$17.9',
+    wallArbL1: '$18.1',
+    wallArbL2: '$18.2',
+    maxEntryWallUsd: 10000,
+    edgeSpreadPct: 0.04,
+    macroRisk: '🟢 Безопасно',
+    verdict: 'БИТЬ МАРКЕТОМ',
+  };
+
   const sampleStock: MarketMatrixRow = {
     symbol: 'MSFT',
     type: 'Stock',
     isStock: true,
-    earningsText: '28.10.2026 🔥 EARNINGS BOOST',
-    hasEarningsBoost: true,
-    daysUntilEarnings: 4,
+    earningsText: '— (Без отчета 🟢)',
+    hasEarningsBoost: false,
+    daysUntilEarnings: 999999,
     loss100Usd: 18.4,
     loss100Pct: 0.05,
     loss50Usd: 9.1,
@@ -195,16 +243,23 @@ test('generateCanonicalJsonFile produces valid structured JSON with stocks and o
     verdict: 'БИТЬ МАРКЕТОМ',
   };
 
-  const jsonStr = generateCanonicalMarkdownFile([sampleStock, sampleCrypto], calculateDynamicNotional(10000));
+  const jsonStr = generateCanonicalMarkdownFile([sampleBoost, sampleStock, sampleCrypto], calculateDynamicNotional(10000));
   const parsed = JSON.parse(jsonStr);
 
-  assert.equal(parsed.total_markets, 2);
+  assert.equal(parsed.total_markets, 3);
+  assert.equal(parsed.total_boosts, 1);
   assert.equal(parsed.total_stocks, 1);
   assert.equal(parsed.total_other_markets, 1);
+  assert.ok(Array.isArray(parsed.boosts_section));
   assert.ok(Array.isArray(parsed.stocks_section));
   assert.ok(Array.isArray(parsed.other_markets_section));
+  assert.equal(parsed.boosts_section[0].symbol, 'BMNR');
   assert.equal(parsed.stocks_section[0].symbol, 'MSFT');
   assert.equal(parsed.other_markets_section[0].symbol, 'SOL');
-  assert.ok(parsed.markets[0].divider !== undefined);
-  assert.ok(parsed.markets[0].is_stock === true);
+  assert.ok(parsed.markets[0].divider.includes('СЕКЦИЯ БУСТОВ'));
+  assert.equal(parsed.markets[0].symbol, 'BMNR');
+  assert.ok(parsed.markets[1].divider.includes('СЕКЦИЯ АКЦИЙ'));
+  assert.equal(parsed.markets[1].symbol, 'MSFT');
+  assert.ok(parsed.markets[2].divider.includes('ДРУГИЕ РЫНКИ'));
+  assert.equal(parsed.markets[2].symbol, 'SOL');
 });

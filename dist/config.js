@@ -119,12 +119,13 @@ export function updateWallets(wallets) {
     }
 }
 export function getActiveHedges(config) {
-    if (config.hedges && config.hedges.length > 0) {
-        const active = config.hedges.filter((h) => h.active !== false);
-        if (active.length > 0)
-            return active;
+    if (config.hedges && Array.isArray(config.hedges)) {
+        return config.hedges.filter((h) => h.active !== false);
     }
-    return config.currentHedge ? [config.currentHedge] : [];
+    if (config.currentHedge && config.currentHedge.active !== false) {
+        return [config.currentHedge];
+    }
+    return [];
 }
 export function deactivateHedge(symbol) {
     try {

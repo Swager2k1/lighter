@@ -375,8 +375,8 @@ export async function deactivateHedgeOnchain(symbol: string, manualExitPrice?: n
     minute: '2-digit',
   });
 
-  const rhLeg = hedge?.legs?.find((l) => l.side === 'short') || hedge?.legs?.[0];
-  const arbLeg = hedge?.legs?.find((l) => l.side === 'long') || hedge?.legs?.[1];
+  const rhLeg = hedge?.legs?.find((l) => l.id?.startsWith('rh_') || !l.name.includes('Core')) || hedge?.legs?.[0];
+  const arbLeg = hedge?.legs?.find((l) => l.id?.startsWith('core_') || l.name.includes('Core')) || hedge?.legs?.[1];
 
   const rhEntry = rhLeg?.entryPrice || exitPrice;
   const arbEntry = arbLeg?.entryPrice || exitPrice;
@@ -387,8 +387,14 @@ export async function deactivateHedgeOnchain(symbol: string, manualExitPrice?: n
   // Расчет реального PnL:
   // Short PnL = (entry - exit) * size
   // Long PnL = (exit - entry) * size
-  const rhPnl = parseFloat(((rhEntry - exitPrice) * rhSize).toFixed(2));
-  const arbPnl = parseFloat(((exitPrice - arbEntry) * arbSize).toFixed(2));
+  const rhIsLong = rhLeg?.side === 'long';
+  const arbIsLong = arbLeg?.side === 'long';
+  const rhPnl = parseFloat(
+    (rhIsLong ? (exitPrice - rhEntry) * rhSize : (rhEntry - exitPrice) * rhSize).toFixed(2)
+  );
+  const arbPnl = parseFloat(
+    (arbIsLong ? (exitPrice - arbEntry) * arbSize : (arbEntry - exitPrice) * arbSize).toFixed(2)
+  );
   const netPnl = parseFloat((rhPnl + arbPnl).toFixed(2));
   const netBalanceChange = netPnl;
 
