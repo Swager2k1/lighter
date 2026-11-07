@@ -336,7 +336,7 @@
     },
     {
       "symbol": "SKHY",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_skhy_short",
@@ -364,7 +364,7 @@
         }
       ],
       "createdAt": 1793994322775,
-      "updatedAt": 1793994322775
+      "updatedAt": 1794077944255
     },
     {
       "symbol": "ORCL",
