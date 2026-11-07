@@ -119,3 +119,4 @@ Week 8 Portfolio Final (All Closed),30.10 - 06.11,All Assets,RH + Arbitrum,All C
 Week 9,06.11 - 13.11,SKHY,Wallet 1 (W1),SKHY Hedge,Delta-Neutral,126.65,-,372,6800.21,6800.21,-,0,--11.16,0,-,-,"Opened via /o SKHY (06.11, 19:45. Friction: -$-11.16, Leverage: 6.93x)"
 Week 9,06.11 - 13.11,ORCL,Wallet 2 (W2),ORCL Hedge,Delta-Neutral,115.21,-,145.3,22.37,22.37,-,0,-2.91,0,-,-,"Opened via /o ORCL (06.11, 19:57. Friction: -$2.91, Leverage: 748.32x)"
 Week 9,06.11 - 13.11,SKHY,Robinhood + Arbitrum,SKHY Closed Hedge,Delta-Neutral,126.65,129.13,372,13600.42,13600.42,-,-11.16,-11.16,0,-,-,"Closed via /c SKHY (23.2ч (с 06.11, 19:45 по 07.11, 18:59). Exit: $129.13, Net PnL: -$11.16)"
+Week 9,06.11 - 13.11,XRP,Wallet 1 (W1),XRP Hedge,Delta-Neutral,1.162,-,34725,6799.45,6799.45,-,0,-34.73,0,-,-,"Opened via /o XRP (07.11, 19:15. Friction: -$34.73, Leverage: 5.94x)"
