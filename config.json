@@ -397,38 +397,70 @@
       ],
       "createdAt": 1793995055321,
       "updatedAt": 1793995055321
+    },
+    {
+      "symbol": "XRP",
+      "active": true,
+      "legs": [
+        {
+          "id": "rh_xrp_short",
+          "name": "Wallet 1 (W1) (Long)",
+          "venue": "lighter",
+          "side": "long",
+          "margin": 6799.45,
+          "entryPrice": 1.162,
+          "leverage": 5.94,
+          "size": 34725,
+          "liquidationPrice": 1,
+          "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        },
+        {
+          "id": "core_xrp_long",
+          "name": "Lighter Core (Wallet 1 (W1)) (Short)",
+          "venue": "lighter",
+          "side": "short",
+          "margin": 6799.45,
+          "entryPrice": 1.163,
+          "leverage": 5.94,
+          "size": 34725,
+          "liquidationPrice": 1.32,
+          "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        }
+      ],
+      "createdAt": 1794078916186,
+      "updatedAt": 1794078916186
     }
   ],
   "currentHedge": {
-    "symbol": "ORCL",
+    "symbol": "XRP",
     "active": true,
     "legs": [
       {
-        "id": "rh_orcl_short",
-        "name": "Wallet 2 (W2) (Long)",
+        "id": "rh_xrp_short",
+        "name": "Wallet 1 (W1) (Long)",
         "venue": "lighter",
         "side": "long",
-        "margin": 22.37,
-        "entryPrice": 115.21,
-        "leverage": 748.32,
-        "size": 145.3,
-        "liquidationPrice": 105.01,
-        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        "margin": 6799.45,
+        "entryPrice": 1.162,
+        "leverage": 5.94,
+        "size": 34725,
+        "liquidationPrice": 1,
+        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       },
       {
-        "id": "core_orcl_long",
-        "name": "Lighter Core (Wallet 2 (W2)) (Short)",
+        "id": "core_xrp_long",
+        "name": "Lighter Core (Wallet 1 (W1)) (Short)",
         "venue": "lighter",
         "side": "short",
-        "margin": 22.37,
-        "entryPrice": 115.23,
-        "leverage": 748.32,
-        "size": 145.3,
-        "liquidationPrice": 124.44,
-        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        "margin": 6799.45,
+        "entryPrice": 1.163,
+        "leverage": 5.94,
+        "size": 34725,
+        "liquidationPrice": 1.32,
+        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       }
     ],
-    "createdAt": 1793995055321,
-    "updatedAt": 1793995055321
+    "createdAt": 1794078916186,
+    "updatedAt": 1794078916186
   }
 }
