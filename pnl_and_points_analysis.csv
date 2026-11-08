@@ -121,3 +121,4 @@ Week 9,06.11 - 13.11,ORCL,Wallet 2 (W2),ORCL Hedge,Delta-Neutral,115.21,-,145.3,
 Week 9,06.11 - 13.11,SKHY,Robinhood + Arbitrum,SKHY Closed Hedge,Delta-Neutral,126.65,129.13,372,13600.42,13600.42,-,-11.16,-11.16,0,-,-,"Closed via /c SKHY (23.2ч (с 06.11, 19:45 по 07.11, 18:59). Exit: $129.13, Net PnL: -$11.16)"
 Week 9,06.11 - 13.11,XRP,Wallet 1 (W1),XRP Hedge,Delta-Neutral,1.162,-,34725,6799.45,6799.45,-,0,-34.73,0,-,-,"Opened via /o XRP (07.11, 19:15. Friction: -$34.73, Leverage: 5.94x)"
 Week 9,06.11 - 13.11,XRP,Robinhood + Arbitrum,XRP Closed Hedge,Delta-Neutral,1.162,1.1512,34725,13598.9,13598.9,-,+34.73,+34.73,0,-,-,"Closed via /c XRP (24.9ч (с 07.11, 19:15 по 08.11, 20:07). Exit: $1.1512, Net PnL: +$34.73)"
+Week 9,06.11 - 13.11,SKHY,Wallet 1 (W1),SKHY Hedge,Delta-Neutral,127.31,-,389.2861,7164.01,7164.01,-,0,--62.29,0,-,-,"Opened via /o SKHY (08.11, 21:38. Friction: -$-62.29, Leverage: 6.92x)"
