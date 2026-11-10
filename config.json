@@ -429,38 +429,70 @@
       ],
       "createdAt": 1794078916186,
       "updatedAt": 1794168452092
+    },
+    {
+      "symbol": "SNDK",
+      "active": true,
+      "legs": [
+        {
+          "id": "rh_sndk_short",
+          "name": "Wallet 1 (W1) (Long)",
+          "venue": "lighter",
+          "side": "long",
+          "margin": 7110.2,
+          "entryPrice": 857.54,
+          "leverage": 6.93,
+          "size": 57.44,
+          "liquidationPrice": 780.59,
+          "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        },
+        {
+          "id": "core_sndk_long",
+          "name": "Lighter Core (Wallet 1 (W1)) (Short)",
+          "venue": "lighter",
+          "side": "short",
+          "margin": 7110.2,
+          "entryPrice": 857.62,
+          "leverage": 6.93,
+          "size": 57.44,
+          "liquidationPrice": 952.83,
+          "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        }
+      ],
+      "createdAt": 1794349472561,
+      "updatedAt": 1794349472561
     }
   ],
   "currentHedge": {
-    "symbol": "SKHY",
-    "active": false,
+    "symbol": "SNDK",
+    "active": true,
     "legs": [
       {
-        "id": "rh_skhy_short",
+        "id": "rh_sndk_short",
         "name": "Wallet 1 (W1) (Long)",
         "venue": "lighter",
         "side": "long",
-        "margin": 7113.77,
-        "entryPrice": 134.89,
+        "margin": 7110.2,
+        "entryPrice": 857.54,
         "leverage": 6.93,
-        "size": 365.5,
-        "liquidationPrice": 122.79,
+        "size": 57.44,
+        "liquidationPrice": 780.59,
         "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       },
       {
-        "id": "core_skhy_long",
+        "id": "core_sndk_long",
         "name": "Lighter Core (Wallet 1 (W1)) (Short)",
         "venue": "lighter",
         "side": "short",
-        "margin": 7113.77,
-        "entryPrice": 134.91,
+        "margin": 7110.2,
+        "entryPrice": 857.62,
         "leverage": 6.93,
-        "size": 365.5,
-        "liquidationPrice": 145.64,
+        "size": 57.44,
+        "liquidationPrice": 952.83,
         "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       }
     ],
-    "createdAt": 1794260135247,
-    "updatedAt": 1794347162333
+    "createdAt": 1794349472561,
+    "updatedAt": 1794349472561
   }
 }
