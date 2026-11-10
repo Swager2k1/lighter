@@ -125,3 +125,4 @@ Week 9,06.11 - 13.11,SKHY,Wallet 1 (W1),SKHY Hedge,Delta-Neutral,127.31,-,389.28
 Week 9,06.11 - 13.11,SKHY,Robinhood + Arbitrum,SKHY Closed Hedge,Delta-Neutral,127.31,135.28,389.2861,14328.02,14328.02,-,-62.29,-62.29,0,-,-,"Closed via /c SKHY (23ч (с 08.11, 21:38 по 09.11, 20:39). Exit: $135.28, Net PnL: -$62.29)"
 Week 9,06.11 - 13.11,SKHY,Wallet 1 (W1),SKHY Hedge,Delta-Neutral,134.89,-,365.5,7113.77,7113.77,-,0,-7.31,0,-,-,"Opened via /o SKHY (09.11, 21:35. Friction: -$7.31, Leverage: 6.93x)"
 Week 9,06.11 - 13.11,SKHY,Robinhood + Arbitrum,SKHY Closed Hedge,Delta-Neutral,134.89,129.96,365.5,14227.54,14227.54,-,+7.31,+7.31,0,-,-,"Closed via /c SKHY (24.2ч (с 09.11, 21:35 по 10.11, 21:46). Exit: $129.96, Net PnL: +$7.31)"
+Week 9,06.11 - 13.11,SNDK,Wallet 1 (W1),SNDK Hedge,Delta-Neutral,857.54,-,57.44,7110.2,7110.2,-,0,-4.6,0,-,-,"Opened via /o SNDK (10.11, 22:24. Friction: -$4.6, Leverage: 6.93x)"
