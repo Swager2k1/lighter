@@ -368,7 +368,7 @@
     },
     {
       "symbol": "ORCL",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_orcl_short",
@@ -396,7 +396,7 @@
         }
       ],
       "createdAt": 1793995055321,
-      "updatedAt": 1793995055321
+      "updatedAt": 1794377666045
     },
     {
       "symbol": "XRP",
