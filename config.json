@@ -432,7 +432,7 @@
     },
     {
       "symbol": "SNDK",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_sndk_short",
@@ -460,7 +460,7 @@
         }
       ],
       "createdAt": 1794349472561,
-      "updatedAt": 1794349472561
+      "updatedAt": 1794391310296
     }
   ],
   "currentHedge": {
