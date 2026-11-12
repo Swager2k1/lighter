@@ -336,7 +336,7 @@
     },
     {
       "symbol": "SKHY",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_skhy_short",
@@ -364,7 +364,7 @@
         }
       ],
       "createdAt": 1794398145159,
-      "updatedAt": 1794398145159
+      "updatedAt": 1794494187451
     },
     {
       "symbol": "ORCL",
@@ -465,7 +465,7 @@
   ],
   "currentHedge": {
     "symbol": "SKHY",
-    "active": true,
+    "active": false,
     "legs": [
       {
         "id": "rh_skhy_short",
@@ -493,6 +493,6 @@
       }
     ],
     "createdAt": 1794398145159,
-    "updatedAt": 1794398145159
+    "updatedAt": 1794494187451
   }
 }
