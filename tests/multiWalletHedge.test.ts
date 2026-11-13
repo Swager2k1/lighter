@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
 import { getHedgeKey, saveHedgeConfig, deactivateHedge, findHedge, loadConfig } from '../src/config.js';
 import { parseCloseCommandArgs } from '../src/services/positionSyncService.js';
 import { ThreeLegHedge } from '../src/types.js';
@@ -116,6 +117,13 @@ describe('Multi-Wallet Simultaneous Hedges Architecture', () => {
 
     // Clean up test hedges
     deactivateHedge('TESTSYM', 'w2');
+    const finalCfg = loadConfig();
+    finalCfg.hedges = finalCfg.hedges.filter(h => !h.id.startsWith('TESTSYM'));
+    const activeHedge = finalCfg.hedges.find(h => h.active);
+    if (activeHedge) {
+      finalCfg.currentHedge = activeHedge;
+    }
+    fs.writeFileSync('config.json', JSON.stringify(finalCfg, null, 2), 'utf8');
   });
 });
 
