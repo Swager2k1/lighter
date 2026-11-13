@@ -217,10 +217,11 @@ export function formatTopCardsMessage(params) {
         `• 100% Notional (7x): **$${sizing.notional100Pct}** (маржа: $${sizing.margin100Pct})`,
         `• 50% Notional (7x): **$${sizing.notional50Pct}** (маржа: $${sizing.margin50Pct})`,
         ``,
-        `🏆 **${title}**`,
-        `*(Приоритет: 🔥 Бусты недели → 📈 Акции по мин. Loss 100% → 🌐 Другие пары)*`,
-        `━━━━━━━━━━━━━━━━━━━━`,
     ];
+    if (mode === 'open') {
+        lines.push(`🔥 **БУСТЫ НЕДЕЛИ: LIGHTER POINTS PROGRAM**`, `━━━━━━━━━━━━━━━━━━━━`, `• ⚡️ **Earnings Boost (Квартальные отчеты недели):**`, `  - **$NVDA** (18.11 AMC | через 5д) — главный AI-отчет сезона. Закрыть до 17.11 20:00 UTC`, `  - **$BABA** (19.11 BMO | через 6д) — китайский e-commerce лидер. Закрыть до 18.11 20:00 UTC`, `  *(Дает максимальную долю распределения в еженедельном пуле Weekly Points)*`, `• 🚀 **Pre-IPO & Low-OI пулы:**`, `  - **$OPENAI**, **$ANTHROPIC**, **$CRCL**, **$SHEIN** — низкий OI (макс. yield поинтов на $1k)`, `• 🛡 **Канонический Hedge Boost (2.5x):**`, `  - Вектор Robinhood SHORT + Arbitrum Core LONG дает **2.5x** ко всем начислениям`, ``);
+    }
+    lines.push(`🏆 **${title}**`, `*(Приоритет: 🔥 Бусты недели → 📈 Акции по мин. Loss 100% → 🌐 Другие пары)*`, `━━━━━━━━━━━━━━━━━━━━`);
     topRows.forEach((r, idx) => {
         let categoryBadge = r.isStock ? '📈 [АКЦИЯ]' : '🌐 [ДРУГОЙ РЫНОК]';
         if (r.hasEarningsBoost) {
@@ -686,9 +687,14 @@ export async function calculateActiveHedgesExitReport(configOverride) {
         const arbPnl50Str = arbPnl50 >= 0 ? `+$${arbPnl50}` : `-$${Math.abs(arbPnl50)}`;
         lines.push(`📌 **$${sym}** (Активна на ${legName} | ${leverage}x плечо)`, `• Текущая позиция: **${size} ${sym}** (Номинал: **$${totalNotional}**)`, `• Вход: RH Short **$${rhEntry}** | Arb Long **$${arbEntry}**`, `• Стаканы выхода: RH Ask **$${rhAskPrice}** | Arb Bid **$${arbBidPrice}** (спред: ${spreadExitPct}%)`, ``, `🔻 **Полное закрытие (100%):**`, `• Закрываемый объем: **$${totalNotional}** (${size} ${sym})`, `• Спред выхода (стакан): **${spread100Str}**`, `• Ожидаемый Net PnL выхода: **${netExit100Str}** (RH ${rhPnl100Str}, Arb ${arbPnl100Str})`, ``, `🔻 **Половина позиции (50%):**`, `• Закрываемый объем: **$${halfNotional}** (${halfSize} ${sym})`, `• Спред выхода (стакан): **${spread50Str}**`, `• Ожидаемый Net PnL выхода: **${netExit50Str}** (RH ${rhPnl50Str}, Arb ${arbPnl50Str})`, `━━━━━━━━━━━━━━━━━━━━`);
     }
-    const buttons = activeHedges.map((h) => [
-        { text: `🛑 Закрыть ${h.symbol}`, callback_data: `close_${h.symbol}` },
-    ]);
+    const buttons = activeHedges.map((h) => {
+        const slot = h.walletSlot?.toLowerCase() || (h.legs[0]?.name?.includes('W2') ? 'w2' : 'w1');
+        const label = slot ? ` (${slot.toUpperCase()})` : '';
+        const callbackData = `close_${h.symbol}_${slot}`;
+        return [
+            { text: `🛑 Закрыть ${h.symbol}${label}`, callback_data: callbackData },
+        ];
+    });
     return {
         text: lines.join('\n'),
         inlineKeyboard: { inline_keyboard: buttons },

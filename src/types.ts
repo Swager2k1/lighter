@@ -15,7 +15,9 @@ export interface LegConfig {
 }
 
 export interface ThreeLegHedge {
+  id?: string;
   symbol: string;
+  walletSlot?: 'w1' | 'w2';
   active: boolean;
   legs: LegConfig[];
   createdAt: number;

@@ -1,4 +1,9 @@
-Anti-AI Style Rules (Natural English Generation):
+---
+name: no-ai-slope
+description: Anti-AI Style Rules for natural English generation without repetitive templates or AI clichés
+---
+
+# Anti-AI Style Rules (Natural English Generation)
 
 Zero Em-Dashes: Строго без тире (—) в английском тексте.
 

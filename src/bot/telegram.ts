@@ -252,8 +252,11 @@ export class TelegramBotService {
     await this.answerCallbackQuery(cb.id, 'Принято!');
 
     if (data.startsWith('close_')) {
-      const symbol = data.replace('close_', '');
-      const reply = await deactivateHedgeOnchain(symbol);
+      const rest = data.replace('close_', '');
+      const parts = rest.split('_');
+      const symbol = parts[0];
+      const targetWallet = parts[1] === 'w1' || parts[1] === 'w2' ? (parts[1] as 'w1' | 'w2') : undefined;
+      const reply = await deactivateHedgeOnchain(symbol, targetWallet);
       await this.sendMessage(chatId, reply);
       if (onHedgeUpdate) {
         const freshConfig = loadConfig();
@@ -330,9 +333,13 @@ export class TelegramBotService {
         await this.sendMessage(chatId, '❌ Нет активных связок для закрытия.');
         return;
       }
-      const buttons = active.map((h) => [
-        { text: `🛑 Закрыть ${h.symbol}`, callback_data: `close_${h.symbol}` },
-      ]);
+      const buttons = active.map((h) => {
+        const slot = h.walletSlot?.toLowerCase() || (h.legs[0]?.name?.includes('W2') ? 'w2' : 'w1');
+        const label = slot ? ` (${slot.toUpperCase()})` : '';
+        return [
+          { text: `🛑 Закрыть ${h.symbol}${label}`, callback_data: `close_${h.symbol}_${slot}` },
+        ];
+      });
       await this.sendMessage(
         chatId,
         '🛑 **Какую открытую позицию вы закрыли на бирже?**\nНажмите кнопку для моментальной остановки сирены и записи PnL в журнал:',
@@ -512,7 +519,7 @@ export class TelegramBotService {
         if (args.length > 0) {
           const parsed = parseCloseCommandArgs(args);
           const ticker = parsed.symbol || args[0].toUpperCase();
-          const reply = await deactivateHedgeOnchain(ticker, parsed.exitPrice);
+          const reply = await deactivateHedgeOnchain(ticker, parsed.targetWallet, parsed.exitPrice);
           await this.sendMessage(chatId, reply);
           if (onHedgeUpdate) {
             const freshConfig = loadConfig();

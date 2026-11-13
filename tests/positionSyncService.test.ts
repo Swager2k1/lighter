@@ -103,11 +103,11 @@ test('parseCloseCommandArgs correctly parses symbol and optional exit price', as
   assert.equal(c2.exitPrice, 640.10);
 });
 
-test('getCurrentTradingWeek returns Week 9 and 06.11 - 13.11', async () => {
+test('getCurrentTradingWeek returns Week 10 and 13.11 - 20.11', async () => {
   const { getCurrentTradingWeek } = await import('../src/services/positionSyncService.js');
   const weekInfo = getCurrentTradingWeek();
-  assert.equal(weekInfo.week, 'Week 9');
-  assert.equal(weekInfo.period, '06.11 - 13.11');
+  assert.equal(weekInfo.week, 'Week 10');
+  assert.equal(weekInfo.period, '13.11 - 20.11');
 });
 
 test('parseOpenCommandArgs validates all argument formats safely without side effects', async () => {

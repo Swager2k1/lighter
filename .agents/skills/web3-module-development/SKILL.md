@@ -1,4 +1,5 @@
 ---
+name: web3-module-development
 description: How to create a new Web3 protocol module for the QSO automation framework
 ---
 

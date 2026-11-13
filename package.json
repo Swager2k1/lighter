@@ -10,7 +10,7 @@
     "dev": "tsx src/index.ts",
     "sync": "git pull --rebase --autostash origin main",
     "deploy": "npm run typecheck && npm test && git pull --rebase --autostash origin main && git push origin main",
-    "test": "node --import tsx --test tests/botHandlers.test.ts tests/botOpsCommands.test.ts tests/calculator.test.ts tests/calendarService.test.ts tests/config.test.ts tests/connectors.test.ts tests/criticalBot.test.ts tests/githubSyncService.test.ts tests/healthServer.test.ts tests/marketMatrixService.test.ts tests/marketMatrixValidation.test.ts tests/marketScanner.test.ts tests/positionSyncService.test.ts tests/rebalanceService.test.ts tests/riskEngine.test.ts",
+    "test": "node --import tsx --test tests/botHandlers.test.ts tests/botOpsCommands.test.ts tests/calculator.test.ts tests/calendarService.test.ts tests/config.test.ts tests/connectors.test.ts tests/criticalBot.test.ts tests/githubSyncService.test.ts tests/healthServer.test.ts tests/marketMatrixService.test.ts tests/marketMatrixValidation.test.ts tests/marketScanner.test.ts tests/multiWalletHedge.test.ts tests/positionSyncService.test.ts tests/rebalanceService.test.ts tests/riskEngine.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

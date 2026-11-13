@@ -209,6 +209,48 @@
       "costsUsd": 129.06,
       "costPerPointUsd": 1.12,
       "notes": "13 total closed cycles across 2 wallets. Net realized cost $129.06 for 114.99 pts ($1.12/pt 7d realized, $0.28/pt post-04.11). All-time points: 383.89 pts at $1.02/pt all-time. Yield: 6.81 pts/$1k."
+    },
+    {
+      "week": "Week 9 (W1)",
+      "period": "06.11 - 13.11",
+      "wallet": "Wallet 1 (W1)",
+      "rh": "6300.34 -> 6783.42",
+      "core": "6815.30 -> 7203.68",
+      "pts": 116.66,
+      "totalVolume": "845.2k",
+      "oi": "190k-550k",
+      "pairs": "SKHY, XRP, SNDK",
+      "costsUsd": -4.73,
+      "costPerPointUsd": "PROFIT (-$0.04/pt)",
+      "notes": "W1 mega harvest (+116.66 pts). 6 cycles (SKHY x4, XRP, SNDK). Closed cleanly with positive net trade PnL +$4.73 and onchain balance growth +$371.59. All-time points: 367.54 pts. Yield: 8.34 pts/$1k."
+    },
+    {
+      "week": "Week 9 (W2)",
+      "period": "06.11 - 13.11",
+      "wallet": "Wallet 2 (W2)",
+      "rh": "1359.38 -> 2399.54",
+      "core": "2422.15 -> 2401.16",
+      "pts": 25.85,
+      "totalVolume": "184.6k",
+      "oi": "200k-450k",
+      "pairs": "ORCL, SKHY",
+      "costsUsd": 6.73,
+      "costPerPointUsd": 0.26,
+      "notes": "W2 swing hold (ORCL 106.3h + SKHY x2). Net trade cost $6.73 for 25.85 pts ($0.26/pt realized). All-time points: 158.86 pts. Yield: 5.38 pts/$1k."
+    },
+    {
+      "week": "Week 9 (Portfolio Total)",
+      "period": "06.11 - 13.11",
+      "wallet": "Combined Portfolio (W1 + W2)",
+      "rh": "7659.72 -> 9182.97",
+      "core": "9237.45 -> 9604.84",
+      "pts": 142.51,
+      "totalVolume": "1029.8k",
+      "oi": "190k-550k",
+      "pairs": "SKHY, XRP, SNDK, ORCL",
+      "costsUsd": 2.00,
+      "costPerPointUsd": "PROFIT (-$0.01/pt)",
+      "notes": "All-time record week: +142.51 pts with total portfolio equity growing from $16,897 to $18,787.80. Net trade friction was negligible ($2.00 / $0.01/pt). All-time points: 526.40 pts at $0.75/pt all-time. Yield: 7.59 pts/$1k."
     }
   ]
 }

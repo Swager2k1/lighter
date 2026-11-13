@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadConfig, saveHedgeConfig, deactivateHedge } from '../config.js';
+import { loadConfig, saveHedgeConfig, deactivateHedge, findHedge } from '../config.js';
 import { fetchLighterPositions, fetchLighterTicker } from '../connectors/lighter.js';
 import { githubSyncService } from './githubSyncService.js';
 export function getCurrentTradingWeek() {
-    // Текущая неделя цикла в проекте — Week 9 (06.11 - 13.11)
+    // Текущая неделя цикла в проекте — Week 10 (13.11 - 20.11)
     return {
-        week: 'Week 9',
-        period: '06.11 - 13.11',
+        week: 'Week 10',
+        period: '13.11 - 20.11',
     };
 }
 export function calculateEntryFriction(params) {
@@ -88,14 +88,22 @@ export function parseCloseCommandArgs(args) {
     if (!args || args.length === 0)
         return {};
     const symbol = args[0]?.toUpperCase().replace('-USD', '').replace('-PERP', '');
+    let targetWallet;
     let exitPrice;
-    if (args.length > 1) {
-        const num = parseFloat(args[1]);
-        if (!isNaN(num) && num > 0) {
-            exitPrice = num;
+    const remaining = args.slice(1);
+    for (const token of remaining) {
+        const lower = token.toLowerCase();
+        if (lower === 'w1' || lower === 'w2') {
+            targetWallet = lower;
+        }
+        else {
+            const num = parseFloat(token);
+            if (!isNaN(num) && num > 0) {
+                exitPrice = num;
+            }
         }
     }
-    return { symbol, exitPrice };
+    return { symbol, targetWallet, exitPrice };
 }
 export async function activateHedgeOnchain(symbol, targetWallet, manualSize, manualPrice, manualLeverage) {
     const config = loadConfig();
@@ -196,12 +204,15 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
     const arbLiq = arbPos?.liquidationPrice && arbPos.liquidationPrice > 0
         ? arbPos.liquidationPrice
         : parseFloat((arbEntryPrice * (arbSide === 'short' ? 1 + 1 / leverage - 0.06 : 1 - 1 / leverage + 0.06)).toFixed(2));
+    const hedgeId = `${normSym}_${selectedWallet.toUpperCase()}`;
     const updatedHedge = {
+        id: hedgeId,
         symbol: normSym,
+        walletSlot: selectedWallet,
         active: true,
         legs: [
             {
-                id: `rh_${normSym.toLowerCase()}_short`,
+                id: `rh_${normSym.toLowerCase()}_${selectedWallet}_short`,
                 name: `${targetName} (${rhSide === 'short' ? 'Short' : 'Long'})`,
                 venue: 'lighter',
                 side: rhSide,
@@ -213,7 +224,7 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
                 walletAddress: targetAddr,
             },
             {
-                id: `core_${normSym.toLowerCase()}_long`,
+                id: `core_${normSym.toLowerCase()}_${selectedWallet}_long`,
                 name: `Lighter Core (${targetName}) (${arbSide === 'short' ? 'Short' : 'Long'})`,
                 venue: 'lighter',
                 side: arbSide,
@@ -276,13 +287,16 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
         `• 🚨 **Мониторинг ликвидаций и сирена: АКТИВИРОВАНЫ**`,
     ].join('\n');
 }
-export async function deactivateHedgeOnchain(symbol, manualExitPrice) {
+export async function deactivateHedgeOnchain(symbol, targetWallet, manualExitPrice) {
     const normSym = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '');
     const config = loadConfig();
-    const hedge = config.hedges?.find((h) => h.symbol.toUpperCase() === normSym) || config.currentHedge;
-    const success = deactivateHedge(normSym);
+    const hedge = findHedge(config, normSym, targetWallet);
+    if (!hedge) {
+        return `⚠️ Связка **${normSym}**${targetWallet ? ` (${targetWallet.toUpperCase()})` : ''} не найдена среди активных в настройках.`;
+    }
+    const success = deactivateHedge(normSym, targetWallet);
     if (!success) {
-        return `⚠️ Связка **${normSym}** не найдена среди активных в настройках.`;
+        return `⚠️ Связка **${normSym}**${targetWallet ? ` (${targetWallet.toUpperCase()})` : ''} не найдена среди активных в настройках.`;
     }
     const ticker = await fetchLighterTicker(normSym);
     const exitPrice = manualExitPrice || ticker?.lastTradePrice || ticker?.markPrice || hedge?.legs[0]?.entryPrice || 0;
@@ -320,17 +334,21 @@ export async function deactivateHedgeOnchain(symbol, manualExitPrice) {
     const arbPnl = parseFloat((arbIsLong ? (exitPrice - arbEntry) * arbSize : (arbEntry - exitPrice) * arbSize).toFixed(2));
     const netPnl = parseFloat((rhPnl + arbPnl).toFixed(2));
     const netBalanceChange = netPnl;
+    // Определение имени кошелька для Venue в CSV
+    const slot = hedge.walletSlot?.toLowerCase() || targetWallet?.toLowerCase();
+    const walletVenue = slot === 'w2' ? 'Wallet 2 (W2)' : slot === 'w1' ? 'Wallet 1 (W1)' : 'Robinhood + Arbitrum';
+    const walletLabel = slot ? ` (${slot.toUpperCase()})` : '';
     const durationNote = `${durationHours}ч (с ${openDateStr} по ${closeDateStr})`;
     const netPnlStr = netPnl >= 0 ? `+$${netPnl}` : `-$${Math.abs(netPnl)}`;
     const rhPnlStr = rhPnl >= 0 ? `+$${rhPnl}` : `-$${Math.abs(rhPnl)}`;
     const arbPnlStr = arbPnl >= 0 ? `+$${arbPnl}` : `-$${Math.abs(arbPnl)}`;
-    const notes = `Closed via /c ${normSym} (${durationNote}. Exit: $${exitPrice}, Net PnL: ${netPnlStr})`;
+    const notes = `Closed via /c ${normSym}${walletLabel} (${durationNote}. Exit: $${exitPrice}, Net PnL: ${netPnlStr})`;
     const csvRow = formatCsvExitRow({
         week,
         period,
         asset: normSym,
-        venue: 'Robinhood + Arbitrum',
-        legDescription: `${normSym} Closed Hedge`,
+        venue: walletVenue,
+        legDescription: `${normSym} Closed Hedge${walletLabel}`,
         side: 'Delta-Neutral',
         entryPrice: rhEntry,
         exitPrice,
@@ -342,8 +360,9 @@ export async function deactivateHedgeOnchain(symbol, manualExitPrice) {
     });
     appendRowToCsv(csvRow);
     return [
-        `🛑 **ПОЗИЦИЯ ${normSym} УСПЕШНО ЗАКРЫТА!**`,
+        `🛑 **ПОЗИЦИЯ ${normSym}${walletLabel} УСПЕШНО ЗАКРЫТА!**`,
         `━━━━━━━━━━━━━━━━━━━━`,
+        `• Кошелек: **${walletVenue}**`,
         `• Связка деактивирована в \`config.json\` (\`active: false\`).`,
         `• ⏱ **Время удержания:** **${durationNote}**`,
         `• 💵 **Цены исполнения:** Вход RH: **$${rhEntry}** | Arb: **$${arbEntry}** ➔ Выход: **$${exitPrice}**`,
@@ -351,7 +370,7 @@ export async function deactivateHedgeOnchain(symbol, manualExitPrice) {
         `  - RH Short: **${rhPnlStr}**`,
         `  - Arb Long: **${arbPnlStr}**`,
         `  - Итоговый Net PnL: **${netPnlStr}**`,
-        `• 🔕 **Мониторинг ликвидаций и сирена по ${normSym} остановлены.**`,
+        `• 🔕 **Мониторинг ликвидаций и сирена по ${normSym}${walletLabel} остановлены.**`,
         `• 📝 Запись с датами и результатом внесена в \`pnl_and_points_analysis.csv\`.`,
     ].join('\n');
 }

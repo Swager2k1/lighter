@@ -1,24 +1,24 @@
 {
-  "updatedAt": "2026-11-06",
-  "currentFarmWeek": "Week 13 (06.11 - 12.11)",
+  "updatedAt": "2026-11-13",
+  "currentFarmWeek": "Week 10 (13.11 - 20.11)",
   "earnings": {
     "CRWV": {
       "date": "10.11.2026",
       "time": "AMC",
-      "boost": true,
-      "risk": "Отчет 10.11 (AMC), закрыть до 09.11"
+      "boost": false,
+      "risk": "Отчитался 10.11 🟢"
     },
     "NVDA": {
       "date": "18.11.2026",
       "time": "AMC",
       "boost": true,
-      "risk": "Закрыть до 17.11"
+      "risk": "Закрыть до 17.11 20:00 UTC"
     },
     "BABA": {
       "date": "19.11.2026",
       "time": "BMO",
       "boost": true,
-      "risk": "Закрыть до 18.11"
+      "risk": "Закрыть до 18.11 20:00 UTC"
     },
     "AAPL": {
       "date": "02.11.2026",

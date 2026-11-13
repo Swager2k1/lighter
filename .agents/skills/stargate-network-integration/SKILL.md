@@ -1,4 +1,5 @@
 ---
+name: stargate-network-integration
 description: How to add a new network to the Stargate Bridge module for cross-chain transfers
 ---
 

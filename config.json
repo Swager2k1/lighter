@@ -44,7 +44,9 @@
         }
       ],
       "createdAt": 1792780000000,
-      "updatedAt": 1792860063451
+      "updatedAt": 1792860063451,
+      "walletSlot": "w1",
+      "id": "META_W1"
     },
     {
       "symbol": "PLTR",
@@ -76,7 +78,9 @@
         }
       ],
       "createdAt": 1792783000000,
-      "updatedAt": 1792865886124
+      "updatedAt": 1792865886124,
+      "walletSlot": "w2",
+      "id": "PLTR_W2"
     },
     {
       "symbol": "AMD",
@@ -108,7 +112,9 @@
         }
       ],
       "createdAt": 1792436000000,
-      "updatedAt": 1793630558075
+      "updatedAt": 1793630558075,
+      "walletSlot": "w1",
+      "id": "AMD_W1"
     },
     {
       "symbol": "BABA",
@@ -140,7 +146,9 @@
         }
       ],
       "createdAt": 1792225000000,
-      "updatedAt": 1792225000000
+      "updatedAt": 1792225000000,
+      "walletSlot": "w1",
+      "id": "BABA_W1"
     },
     {
       "symbol": "COIN",
@@ -172,7 +180,9 @@
         }
       ],
       "createdAt": 1792225000000,
-      "updatedAt": 1793892458117
+      "updatedAt": 1793892458117,
+      "walletSlot": "w1",
+      "id": "COIN_W1"
     },
     {
       "symbol": "INTC",
@@ -204,7 +214,9 @@
         }
       ],
       "createdAt": 1792862610115,
-      "updatedAt": 1793803059436
+      "updatedAt": 1793803059436,
+      "walletSlot": "w1",
+      "id": "INTC_W1"
     },
     {
       "symbol": "TRX",
@@ -236,7 +248,9 @@
         }
       ],
       "createdAt": 1793628452386,
-      "updatedAt": 1793741486640
+      "updatedAt": 1793741486640,
+      "walletSlot": "w2",
+      "id": "TRX_W2"
     },
     {
       "symbol": "CRCL",
@@ -268,7 +282,9 @@
         }
       ],
       "createdAt": 1793631557398,
-      "updatedAt": 1793789199726
+      "updatedAt": 1793789199726,
+      "walletSlot": "w1",
+      "id": "CRCL_W1"
     },
     {
       "symbol": "TSM",
@@ -300,7 +316,9 @@
         }
       ],
       "createdAt": 1793747912272,
-      "updatedAt": 1793965137960
+      "updatedAt": 1793965137960,
+      "walletSlot": "w2",
+      "id": "TSM_W2"
     },
     {
       "symbol": "XAU",
@@ -332,7 +350,9 @@
         }
       ],
       "createdAt": 1793915477143,
-      "updatedAt": 1793990267818
+      "updatedAt": 1793990267818,
+      "walletSlot": "w1",
+      "id": "XAU_W1"
     },
     {
       "symbol": "SKHY",
@@ -364,7 +384,9 @@
         }
       ],
       "createdAt": 1794494227857,
-      "updatedAt": 1794579383140
+      "updatedAt": 1794579383140,
+      "walletSlot": "w2",
+      "id": "SKHY_W2"
     },
     {
       "symbol": "ORCL",
@@ -396,7 +418,9 @@
         }
       ],
       "createdAt": 1793995055321,
-      "updatedAt": 1794377666045
+      "updatedAt": 1794377666045,
+      "walletSlot": "w2",
+      "id": "ORCL_W2"
     },
     {
       "symbol": "XRP",
@@ -428,7 +452,9 @@
         }
       ],
       "createdAt": 1794078916186,
-      "updatedAt": 1794168452092
+      "updatedAt": 1794168452092,
+      "walletSlot": "w1",
+      "id": "XRP_W1"
     },
     {
       "symbol": "SNDK",
@@ -460,39 +486,106 @@
         }
       ],
       "createdAt": 1794349472561,
-      "updatedAt": 1794391310296
+      "updatedAt": 1794391310296,
+      "walletSlot": "w1",
+      "id": "SNDK_W1"
+    },
+    {
+      "id": "SKHY_W1",
+      "symbol": "SKHY",
+      "walletSlot": "w1",
+      "active": false,
+      "legs": [
+        {
+          "id": "rh_skhy_w1_short",
+          "name": "Wallet 1 (W1) (Short)",
+          "venue": "lighter",
+          "side": "short",
+          "margin": 7090.58,
+          "entryPrice": 140.18,
+          "leverage": 6.93,
+          "size": 350.4,
+          "liquidationPrice": 153.25,
+          "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        },
+        {
+          "id": "core_skhy_w1_long",
+          "name": "Lighter Core (Wallet 1 (W1)) (Long)",
+          "venue": "lighter",
+          "side": "long",
+          "margin": 7090.58,
+          "entryPrice": 140.09,
+          "leverage": 6.93,
+          "size": 350.4,
+          "liquidationPrice": 127.15,
+          "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        }
+      ],
+      "createdAt": 1794398100000,
+      "updatedAt": 1794579383140
+    },
+    {
+      "id": "TESTSYM_W1",
+      "symbol": "TESTSYM",
+      "walletSlot": "w1",
+      "active": false,
+      "legs": [
+        {
+          "id": "rh_test_w1",
+          "name": "W1",
+          "venue": "lighter",
+          "side": "short",
+          "margin": 1000,
+          "entryPrice": 100,
+          "leverage": 7,
+          "size": 10,
+          "walletAddress": "0x1111111111111111111111111111111111111111"
+        }
+      ],
+      "createdAt": 1794584147332,
+      "updatedAt": 1794584147338
+    },
+    {
+      "id": "TESTSYM_W2",
+      "symbol": "TESTSYM",
+      "walletSlot": "w2",
+      "active": false,
+      "legs": [
+        {
+          "id": "rh_test_w2",
+          "name": "W2",
+          "venue": "lighter",
+          "side": "short",
+          "margin": 500,
+          "entryPrice": 100,
+          "leverage": 7,
+          "size": 5,
+          "walletAddress": "0x2222222222222222222222222222222222222222"
+        }
+      ],
+      "createdAt": 1794584147332,
+      "updatedAt": 1794584147340
     }
   ],
   "currentHedge": {
-    "symbol": "SKHY",
+    "id": "TESTSYM_W2",
+    "symbol": "TESTSYM",
+    "walletSlot": "w2",
     "active": false,
     "legs": [
       {
-        "id": "rh_skhy_short",
-        "name": "Wallet 2 (W2) (Long)",
-        "venue": "lighter",
-        "side": "long",
-        "margin": 2411.55,
-        "entryPrice": 138.48,
-        "leverage": 6.91,
-        "size": 120.4,
-        "liquidationPrice": 126.01,
-        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
-      },
-      {
-        "id": "core_skhy_long",
-        "name": "Lighter Core (Wallet 2 (W2)) (Short)",
+        "id": "rh_test_w2",
+        "name": "W2",
         "venue": "lighter",
         "side": "short",
-        "margin": 2411.55,
-        "entryPrice": 138.4,
-        "leverage": 6.91,
-        "size": 120.4,
-        "liquidationPrice": 149.51,
-        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        "margin": 500,
+        "entryPrice": 100,
+        "leverage": 7,
+        "size": 5,
+        "walletAddress": "0x2222222222222222222222222222222222222222"
       }
     ],
-    "createdAt": 1794494227857,
-    "updatedAt": 1794579383140
+    "createdAt": 1794584147332,
+    "updatedAt": 1794584147340
   }
 }

@@ -93,11 +93,39 @@ export function loadConfig(): FullConfig {
   };
 }
 
+export function getHedgeKey(hedge: { id?: string; symbol: string; walletSlot?: 'w1' | 'w2'; legs?: Array<{ walletAddress?: string }> }): string {
+  if (hedge.id && hedge.id.trim() !== '') {
+    return hedge.id.toUpperCase();
+  }
+  const normSym = hedge.symbol.toUpperCase().replace('-USD', '').replace('-PERP', '').trim();
+  const slot = hedge.walletSlot?.toLowerCase();
+  if (slot === 'w1' || slot === 'w2') {
+    return `${normSym}_${slot.toUpperCase()}`;
+  }
+  // Автодетект по адресу первой ноги
+  const wAddr = hedge.legs?.[0]?.walletAddress?.toLowerCase();
+  if (wAddr) {
+    const cfg = loadConfig();
+    const w1 = cfg.wallets.robinhoodWallet1?.toLowerCase();
+    const w2 = cfg.wallets.robinhoodWallet2?.toLowerCase();
+    if (w1 && wAddr === w1) return `${normSym}_W1`;
+    if (w2 && wAddr === w2) return `${normSym}_W2`;
+  }
+  return normSym;
+}
+
 export function saveHedgeConfig(hedge: ThreeLegHedge): void {
   try {
     const current = loadConfig();
     const existingHedges = current.hedges ? [...current.hedges] : (current.currentHedge ? [{ ...current.currentHedge }] : []);
-    const idx = existingHedges.findIndex((h) => h.symbol.toUpperCase() === hedge.symbol.toUpperCase());
+    
+    // Присваиваем стабильный составной ID связки
+    if (!hedge.id) {
+      hedge.id = getHedgeKey(hedge);
+    }
+    const targetKey = getHedgeKey(hedge);
+
+    const idx = existingHedges.findIndex((h) => getHedgeKey(h) === targetKey);
     if (idx >= 0) {
       existingHedges[idx] = hedge;
     } else {
@@ -111,7 +139,7 @@ export function saveHedgeConfig(hedge: ThreeLegHedge): void {
       hedges: existingHedges,
       currentHedge: hedge,
     };
-    writeConfigAndSync(toSave, `sync: save hedge ${hedge.symbol}`);
+    writeConfigAndSync(toSave, `sync: save hedge ${hedge.id || hedge.symbol}`);
   } catch (err) {
     console.error('Ошибка сохранения config.json:', err);
   }
@@ -145,15 +173,59 @@ export function getActiveHedges(config: FullConfig): ThreeLegHedge[] {
   return [];
 }
 
-export function deactivateHedge(symbol: string): boolean {
+export function findHedge(config: FullConfig, symbol: string, targetWallet?: 'w1' | 'w2'): ThreeLegHedge | undefined {
+  const norm = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '').trim();
+  const activeHedges = getActiveHedges(config);
+
+  if (targetWallet) {
+    const slot = targetWallet.toLowerCase();
+    // 1. Ищем среди активных конкретного кошелька
+    const activeMatch = activeHedges.find(
+      (h) => h.symbol.toUpperCase() === norm && (h.walletSlot?.toLowerCase() === slot || getHedgeKey(h).endsWith(`_${slot.toUpperCase()}`))
+    );
+    if (activeMatch) return activeMatch;
+
+    // 2. Ищем среди всех hedges[] конкретного кошелька
+    if (config.hedges && Array.isArray(config.hedges)) {
+      const match = config.hedges.find(
+        (h) => h.symbol.toUpperCase() === norm && (h.walletSlot?.toLowerCase() === slot || getHedgeKey(h).endsWith(`_${slot.toUpperCase()}`))
+      );
+      if (match) return match;
+    }
+
+    // Если запрошен конкретный кошелек, но его нет — не возвращаем чужой кошелек
+    return undefined;
+  }
+
+  // Если кошелек не указан:
+  // 1. Ищем любую активную связку
+  const activeMatch = activeHedges.find((h) => h.symbol.toUpperCase() === norm);
+  if (activeMatch) return activeMatch;
+
+  // 2. Ищем любую связку в hedges[]
+  if (config.hedges && Array.isArray(config.hedges)) {
+    const match = config.hedges.find((h) => h.symbol.toUpperCase() === norm);
+    if (match) return match;
+  }
+
+  return config.currentHedge?.symbol.toUpperCase() === norm ? config.currentHedge : undefined;
+}
+
+export function deactivateHedge(symbol: string, targetWallet?: 'w1' | 'w2'): boolean {
   try {
     const current = loadConfig();
     let found = false;
-    const norm = symbol.toUpperCase().replace('-USD', '').trim();
+    const norm = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '').trim();
+    const targetSlot = targetWallet?.toLowerCase();
 
     if (current.hedges && Array.isArray(current.hedges)) {
       for (const h of current.hedges) {
         if (h.symbol.toUpperCase() === norm) {
+          const hKey = getHedgeKey(h);
+          if (targetSlot) {
+            const matchesSlot = h.walletSlot?.toLowerCase() === targetSlot || hKey.endsWith(`_${targetSlot.toUpperCase()}`);
+            if (!matchesSlot) continue;
+          }
           h.active = false;
           h.updatedAt = Date.now();
           found = true;
@@ -162,9 +234,11 @@ export function deactivateHedge(symbol: string): boolean {
     }
 
     if (current.currentHedge && current.currentHedge.symbol.toUpperCase() === norm) {
-      current.currentHedge.active = false;
-      current.currentHedge.updatedAt = Date.now();
-      found = true;
+      if (!targetSlot || current.currentHedge.walletSlot?.toLowerCase() === targetSlot) {
+        current.currentHedge.active = false;
+        current.currentHedge.updatedAt = Date.now();
+        found = true;
+      }
     }
 
     if (found) {
@@ -176,7 +250,7 @@ export function deactivateHedge(symbol: string): boolean {
         hedges: current.hedges,
         currentHedge: current.currentHedge,
       };
-      writeConfigAndSync(toSave, `sync: deactivate hedge ${norm}`);
+      writeConfigAndSync(toSave, `sync: deactivate hedge ${norm}${targetSlot ? '_' + targetSlot : ''}`);
     }
     return found;
   } catch (err) {
