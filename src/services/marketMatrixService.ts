@@ -328,7 +328,7 @@ export function formatTopCardsMessage(params: {
       `• 🚀 **Pre-IPO & Low-OI пулы:**`,
       `  - **$OPENAI**, **$ANTHROPIC**, **$CRCL**, **$SHEIN** — низкий OI (макс. yield поинтов на $1k)`,
       `• 🛡 **Канонический Hedge Boost (2.5x):**`,
-      `  - Вектор Robinhood SHORT + Arbitrum Core LONG дает **2.5x** ко всем начислениям`,
+      `  - Вектор Robinhood LONG + Arbitrum Core SHORT дает **2.5x** ко всем начислениям`,
       ``
     );
   }
