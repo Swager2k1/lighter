@@ -494,35 +494,35 @@
       "id": "SKHY_W1",
       "symbol": "SKHY",
       "walletSlot": "w1",
-      "active": false,
+      "active": true,
       "legs": [
         {
           "id": "rh_skhy_w1_short",
-          "name": "Wallet 1 (W1) (Short)",
+          "name": "Wallet 1 (W1) (Long)",
           "venue": "lighter",
-          "side": "short",
-          "margin": 7090.58,
-          "entryPrice": 140.18,
+          "side": "long",
+          "margin": 6993.42,
+          "entryPrice": 129.89,
           "leverage": 6.93,
-          "size": 350.4,
-          "liquidationPrice": 153.25,
+          "size": 373,
+          "liquidationPrice": 118.23,
           "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
         },
         {
           "id": "core_skhy_w1_long",
-          "name": "Lighter Core (Wallet 1 (W1)) (Long)",
+          "name": "Lighter Core (Wallet 1 (W1)) (Short)",
           "venue": "lighter",
-          "side": "long",
-          "margin": 7090.58,
-          "entryPrice": 140.09,
+          "side": "short",
+          "margin": 6993.42,
+          "entryPrice": 130.19,
           "leverage": 6.93,
-          "size": 350.4,
-          "liquidationPrice": 127.15,
+          "size": 373,
+          "liquidationPrice": 141.04,
           "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
         }
       ],
-      "createdAt": 1794398100000,
-      "updatedAt": 1794579383140
+      "createdAt": 1794584999081,
+      "updatedAt": 1794584999081
     },
     {
       "id": "TESTSYM_W1",
@@ -568,24 +568,37 @@
     }
   ],
   "currentHedge": {
-    "id": "TESTSYM_W2",
-    "symbol": "TESTSYM",
-    "walletSlot": "w2",
-    "active": false,
+    "id": "SKHY_W1",
+    "symbol": "SKHY",
+    "walletSlot": "w1",
+    "active": true,
     "legs": [
       {
-        "id": "rh_test_w2",
-        "name": "W2",
+        "id": "rh_skhy_w1_short",
+        "name": "Wallet 1 (W1) (Long)",
+        "venue": "lighter",
+        "side": "long",
+        "margin": 6993.42,
+        "entryPrice": 129.89,
+        "leverage": 6.93,
+        "size": 373,
+        "liquidationPrice": 118.23,
+        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+      },
+      {
+        "id": "core_skhy_w1_long",
+        "name": "Lighter Core (Wallet 1 (W1)) (Short)",
         "venue": "lighter",
         "side": "short",
-        "margin": 500,
-        "entryPrice": 100,
-        "leverage": 7,
-        "size": 5,
-        "walletAddress": "0x2222222222222222222222222222222222222222"
+        "margin": 6993.42,
+        "entryPrice": 130.19,
+        "leverage": 6.93,
+        "size": 373,
+        "liquidationPrice": 141.04,
+        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       }
     ],
-    "createdAt": 1794584147332,
-    "updatedAt": 1794584147340
+    "createdAt": 1794584999081,
+    "updatedAt": 1794584999081
   }
 }
