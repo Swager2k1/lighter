@@ -523,45 +523,74 @@
       ],
       "createdAt": 1794584999081,
       "updatedAt": 1794584999081
+    },
+    {
+      "id": "BABA_W2",
+      "symbol": "BABA",
+      "walletSlot": "w2",
+      "active": true,
+      "legs": [
+        {
+          "id": "rh_baba_w2_short",
+          "name": "Wallet 2 (W2) (Long)",
+          "venue": "lighter",
+          "side": "long",
+          "margin": 2399.54,
+          "entryPrice": 94.08,
+          "leverage": 6.86,
+          "size": 175,
+          "liquidationPrice": 85.5,
+          "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        },
+        {
+          "id": "core_baba_w2_long",
+          "name": "Lighter Core (Wallet 2 (W2)) (Short)",
+          "venue": "lighter",
+          "side": "short",
+          "margin": 2399.54,
+          "entryPrice": 94.05,
+          "leverage": 6.86,
+          "size": 175,
+          "liquidationPrice": 101.67,
+          "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        }
+      ],
+      "createdAt": 1794587595532,
+      "updatedAt": 1794587595532
     }
   ],
   "currentHedge": {
-    "id": "SKHY_W1",
-    "symbol": "SKHY",
-    "walletSlot": "w1",
+    "id": "BABA_W2",
+    "symbol": "BABA",
+    "walletSlot": "w2",
     "active": true,
     "legs": [
       {
-        "id": "rh_skhy_w1_short",
-        "name": "Wallet 1 (W1) (Long)",
+        "id": "rh_baba_w2_short",
+        "name": "Wallet 2 (W2) (Long)",
         "venue": "lighter",
         "side": "long",
-        "margin": 6993.42,
-        "entryPrice": 129.89,
-        "leverage": 6.93,
-        "size": 373,
-        "liquidationPrice": 118.23,
-        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        "margin": 2399.54,
+        "entryPrice": 94.08,
+        "leverage": 6.86,
+        "size": 175,
+        "liquidationPrice": 85.5,
+        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
       },
       {
-        "id": "core_skhy_w1_long",
-        "name": "Lighter Core (Wallet 1 (W1)) (Short)",
+        "id": "core_baba_w2_long",
+        "name": "Lighter Core (Wallet 2 (W2)) (Short)",
         "venue": "lighter",
         "side": "short",
-        "margin": 6993.42,
-        "entryPrice": 130.19,
-        "leverage": 6.93,
-        "size": 373,
-        "liquidationPrice": 141.04,
-        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        "margin": 2399.54,
+        "entryPrice": 94.05,
+        "leverage": 6.86,
+        "size": 175,
+        "liquidationPrice": 101.67,
+        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
       }
     ],
-    "createdAt": 1794584999081,
-    "updatedAt": 1794584999081
-  },
-  "telegram": {
-    "botToken": "7705285911:AAH3cgH7hzsX-t3gyzajTxuqionyjnljqHE",
-    "chatId": "405342714",
-    "criticalBotToken": "7882570217:AAFKRRADYDuOKruzFw3EW7JvvK6Ot0YCugk"
+    "createdAt": 1794587595532,
+    "updatedAt": 1794587595532
   }
 }
