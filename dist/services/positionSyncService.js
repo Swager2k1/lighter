@@ -11,16 +11,28 @@ export function getCurrentTradingWeek() {
     };
 }
 export function calculateEntryFriction(params) {
-    const { rhShortPrice, arbLongPrice, size, notional } = params;
-    const frictionUsd = parseFloat(((arbLongPrice - rhShortPrice) * size).toFixed(2));
+    const { size, notional } = params;
+    let buyPrice = params.buyPrice;
+    let sellPrice = params.sellPrice;
+    // Если переданы legacy rhShortPrice / arbLongPrice
+    if (buyPrice === undefined || sellPrice === undefined) {
+        buyPrice = params.arbLongPrice ?? 0;
+        sellPrice = params.rhShortPrice ?? 0;
+    }
+    // Трение (потеря на спреде): если купили дороже, чем продали, friction > 0 (расход)
+    // Если продали дороже, чем купили, friction <= 0 (премия в пользу трейдера)
+    const frictionUsd = parseFloat(((buyPrice - sellPrice) * size).toFixed(2));
     const frictionPct = notional > 0 ? parseFloat(((frictionUsd / notional) * 100).toFixed(3)) : 0;
     return { frictionUsd, frictionPct };
 }
 export function formatCsvEntryRow(params) {
-    // Format matches pnl_and_points_analysis.csv:
-    // Week,Period,Asset,Venue,Leg_Description,Side,Entry_Price,Exit_Price,Size,Margin_Allocated,Initial_Deposit,Ending_Balance,Net_Price_PnL,Net_Balance_Change,Points,Cost_Per_Point_Price,Cost_Per_Point_Realized,Notes
-    const noteStr = params.notes || `Opened via /o ${params.asset} (Friction: -$${params.frictionUsd})`;
-    return `${params.week},${params.period},${params.asset},${params.venue},${params.legDescription},${params.side},${params.entryPrice},-,${params.size},${params.margin},${params.margin},-,0,-${params.frictionUsd},0,-,-,"${noteStr}"`;
+    // frictionUsd > 0 -> потеря (спред расход), пишем -frictionUsd
+    // frictionUsd <= 0 -> премия (базис профит), пишем +|frictionUsd|
+    const balanceChangeStr = params.frictionUsd <= 0
+        ? `+${Math.abs(params.frictionUsd)}`
+        : `-${params.frictionUsd}`;
+    const noteStr = params.notes || `Opened via /o ${params.asset} (Friction: ${balanceChangeStr})`;
+    return `${params.week},${params.period},${params.asset},${params.venue},${params.legDescription},${params.side},${params.entryPrice},-,${params.size},${params.margin},${params.margin},-,0,${balanceChangeStr},0,-,-,"${noteStr}"`;
 }
 export function formatCsvExitRow(params) {
     const noteStr = params.notes || `Closed via /c ${params.asset}`;
@@ -242,9 +254,12 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
     saveHedgeConfig(updatedHedge);
     // 7. Логирование в CSV
     const { week, period } = getCurrentTradingWeek();
+    // Определяем реальную сторону ног для точного расчета спреда
+    const longLeg = updatedHedge.legs.find((l) => l.side === 'long') || updatedHedge.legs[1];
+    const shortLeg = updatedHedge.legs.find((l) => l.side === 'short') || updatedHedge.legs[0];
     const entryFriction = calculateEntryFriction({
-        rhShortPrice: updatedHedge.legs[0].entryPrice,
-        arbLongPrice: updatedHedge.legs[1].entryPrice,
+        buyPrice: longLeg.entryPrice,
+        sellPrice: shortLeg.entryPrice,
         size: updatedHedge.legs[0].size,
         notional: margin * leverage,
     });
@@ -254,6 +269,9 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
         hour: '2-digit',
         minute: '2-digit',
     });
+    const frictionNote = entryFriction.frictionUsd <= 0
+        ? `Премия базиса: +$${Math.abs(entryFriction.frictionUsd)}`
+        : `Трение спреда: -$${entryFriction.frictionUsd}`;
     const csvRow = formatCsvEntryRow({
         week,
         period,
@@ -265,7 +283,7 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
         size: updatedHedge.legs[0].size,
         margin,
         frictionUsd: entryFriction.frictionUsd,
-        notes: `Opened via /o ${normSym} (${nowFormatted}. Friction: -$${entryFriction.frictionUsd}, Leverage: ${leverage}x)`,
+        notes: `Opened via /o ${normSym} (${nowFormatted}. ${frictionNote}, Leverage: ${leverage}x)`,
     });
     appendRowToCsv(csvRow);
     const dataSourceNote = rhPos || arbPos
@@ -273,6 +291,9 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
         : manualSize
             ? '✍️ Ручной ввод'
             : '⚙️ Конфигурация / Fallback';
+    const frictionDisplay = entryFriction.frictionUsd <= 0
+        ? `+$${Math.abs(entryFriction.frictionUsd)} (+${Math.abs(entryFriction.frictionPct)}%) 🟢 (Премия базиса — продажа дороже покупки)`
+        : `-$${entryFriction.frictionUsd} (-${entryFriction.frictionPct}%) 🔻 (Трение стакана / спред)`;
     return [
         `✅ **ПОЗИЦИЯ ${normSym} УСПЕШНО АКТИВИРОВАНА!**`,
         `━━━━━━━━━━━━━━━━━━━━`,
@@ -282,7 +303,7 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
         `• Нога RH (${rhSide === 'short' ? 'Short' : 'Long'}): **${updatedHedge.legs[0].size} ${normSym}** по **$${updatedHedge.legs[0].entryPrice}** (${leverage}x) [Ликв: **$${updatedHedge.legs[0].liquidationPrice}**]`,
         `• Нога Arb (${arbSide === 'short' ? 'Short' : 'Long'}): **${updatedHedge.legs[1].size} ${normSym}** по **$${updatedHedge.legs[1].entryPrice}** (${leverage}x) [Ликв: **$${updatedHedge.legs[1].liquidationPrice}**]`,
         `• Маржа: **$${margin}** | Плечо: **${leverage}x**`,
-        `• Расчётный спред входа: **-$${entryFriction.frictionUsd}** (${entryFriction.frictionPct}%)`,
+        `• Расчётный спред входа: **${frictionDisplay}**`,
         `• Запись внесена в \`pnl_and_points_analysis.csv\``,
         `• 🚨 **Мониторинг ликвидаций и сирена: АКТИВИРОВАНЫ**`,
     ].join('\n');
