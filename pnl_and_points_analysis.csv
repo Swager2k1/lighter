@@ -141,3 +141,4 @@ Week 10,13.11 - 20.11,BABA,Wallet 2 (W2),BABA Hedge,Delta-Neutral,94.08,-,175,23
 Week 10,13.11 - 20.11,SKHY,Wallet 1 (W1),SKHY Closed Hedge (W1),Delta-Neutral,129.89,129.2,373,13986.84,13986.84,-,+111.9,+111.9,0,-,-,"Closed via /c SKHY (W1) (23.5ч (с 13.11, 15:49 по 14.11, 15:19). Exit: $129.2, Net PnL: +$111.9)"
 Week 10,13.11 - 20.11,SKHY,Wallet 1 (W1),SKHY Hedge,Delta-Neutral,127.65,-,375.8,7129.83,7129.83,-,0,+63.89,0,-,-,"Opened via /o SKHY (14.11, 16:13. Премия базиса: +$63.89, Leverage: 6.73x)"
 Week 10,13.11 - 20.11,SKHY,Wallet 1 (W1),SKHY Closed Hedge (W1),Delta-Neutral,127.65,129.84,375.8,14259.66,14259.66,-,+63.88,+63.88,0,-,-,"Closed via /c SKHY (W1) (24.7ч (с 14.11, 16:13 по 15.11, 16:57). Exit: $129.84, Net PnL: +$63.88)"
+Week 10,13.11 - 20.11,SKHY,Wallet 1 (W1),SKHY Hedge,Delta-Neutral,130,-,379.5,7145.65,7145.65,-,0,-34.16,0,-,-,"Opened via /o SKHY (15.11, 17:06. Трение спреда: -$34.16, Leverage: 6.9x)"
