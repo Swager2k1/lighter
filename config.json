@@ -528,7 +528,7 @@
       "id": "BABA_W2",
       "symbol": "BABA",
       "walletSlot": "w2",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_baba_w2_short",
@@ -556,7 +556,7 @@
         }
       ],
       "createdAt": 1794587595532,
-      "updatedAt": 1794587595532
+      "updatedAt": 1794905855911
     }
   ],
   "currentHedge": {
