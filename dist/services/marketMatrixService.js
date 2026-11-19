@@ -219,7 +219,7 @@ export function formatTopCardsMessage(params) {
         ``,
     ];
     if (mode === 'open') {
-        lines.push(`🔥 **БУСТЫ НЕДЕЛИ: LIGHTER POINTS PROGRAM**`, `━━━━━━━━━━━━━━━━━━━━`, `• ⚡️ **Earnings Boost (Квартальные отчеты недели):**`, `  - **$NVDA** (18.11 AMC | через 5д) — главный AI-отчет сезона. Закрыть до 17.11 20:00 UTC`, `  - **$BABA** (19.11 BMO | через 6д) — китайский e-commerce лидер. Закрыть до 18.11 20:00 UTC`, `  *(Дает максимальную долю распределения в еженедельном пуле Weekly Points)*`, `• 🚀 **Pre-IPO & Low-OI пулы:**`, `  - **$OPENAI**, **$ANTHROPIC**, **$CRCL**, **$SHEIN** — низкий OI (макс. yield поинтов на $1k)`, `• 🛡 **Канонический Hedge Boost (2.5x):**`, `  - Вектор Robinhood SHORT + Arbitrum Core LONG дает **2.5x** ко всем начислениям`, ``);
+        lines.push(`🔥 **БУСТЫ НЕДЕЛИ: LIGHTER POINTS PROGRAM**`, `━━━━━━━━━━━━━━━━━━━━`, `• ⚡️ **Earnings Boost (Квартальные отчеты недели):**`, `  - **$NVDA** (18.11 AMC | через 5д) — главный AI-отчет сезона. Закрыть до 17.11 20:00 UTC`, `  - **$BABA** (19.11 BMO | через 6д) — китайский e-commerce лидер. Закрыть до 18.11 20:00 UTC`, `  *(Дает максимальную долю распределения в еженедельном пуле Weekly Points)*`, `• 🚀 **Pre-IPO & Low-OI пулы:**`, `  - **$OPENAI**, **$ANTHROPIC**, **$CRCL**, **$SHEIN** — низкий OI (макс. yield поинтов на $1k)`, `• 🛡 **Канонический Hedge Boost (2.5x):**`, `  - Вектор Robinhood LONG + Arbitrum Core SHORT дает **2.5x** ко всем начислениям`, ``);
     }
     lines.push(`🏆 **${title}**`, `*(Приоритет: 🔥 Бусты недели → 📈 Акции по мин. Loss 100% → 🌐 Другие пары)*`, `━━━━━━━━━━━━━━━━━━━━`);
     topRows.forEach((r, idx) => {

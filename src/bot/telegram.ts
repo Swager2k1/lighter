@@ -230,10 +230,15 @@ export class TelegramBotService {
               }
             }
           }
+        } else {
+          const errText = await res.text().catch(() => '');
+          console.warn(`[Telegram Polling] HTTP ${res.status}: ${errText}. Ожидаю перед повтором...`);
+          const delay = res.status === 409 || res.status === 429 ? 10000 : 5000;
+          await new Promise((r) => setTimeout(r, delay));
         }
-      } catch (err) {
-        // Пауза перед следующим опросом при ошибке соединения
-        await new Promise((r) => setTimeout(r, 3000));
+      } catch (err: any) {
+        console.error('[Telegram Polling] Сетевая ошибка:', err?.message || err);
+        await new Promise((r) => setTimeout(r, 5000));
       }
     }
   }
