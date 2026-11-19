@@ -148,3 +148,4 @@ Week 10,13.11 - 20.11,BABA,Wallet 2 (W2),BABA Closed Hedge (W2),Delta-Neutral,94
 Week 10,13.11 - 20.11,ORCL,Wallet 2 (W2),ORCL Hedge,Delta-Neutral,117.62,-,139.3,38.81,38.81,-,0,-2.79,0,-,-,"Opened via /o ORCL (17.11, 10:53. Трение спреда: -$2.79, Leverage: 422.17x)"
 Week 10,13.11 - 20.11,SKHY,Wallet 1 (W1),SKHY Closed Hedge (W1),Delta-Neutral,122.96,126.78,398.5,14195.78,14195.78,-,-27.9,-27.9,0,-,-,"Closed via /c SKHY (W1) (34.3ч (с 16.11, 20:34 по 18.11, 06:49). Exit: $126.78, Net PnL: -$27.9)"
 Week 10,13.11 - 20.11,INTC,Wallet 1 (W1),INTC Hedge,Delta-Neutral,56.01,-,877.5,7090.19,7090.19,-,0,-28.08,0,-,-,"Opened via /o INTC (18.11, 06:58. Трение спреда: -$28.08, Leverage: 6.93x)"
+Week 10,13.11 - 20.11,INTC,Wallet 1 (W1),INTC Closed Hedge (W1),Delta-Neutral,56.01,56.73,877.5,14180.38,14180.38,-,-28.08,-28.08,0,-,-,"Closed via /c INTC (W1) (24.1ч (с 18.11, 06:58 по 19.11, 07:04). Exit: $56.73, Net PnL: -$28.08)"
