@@ -33,17 +33,19 @@ export function startHealthServer(port = Number(process.env.PORT) || 8080) {
             };
             try {
                 if (botToken) {
-                    const [meRes, whRes] = await Promise.all([
-                        fetch(`https://api.telegram.org/bot${botToken}/getMe`).then((r) => r.json()).catch((e) => ({ error: e.message })),
-                        fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`).then((r) => r.json()).catch((e) => ({ error: e.message })),
-                    ]);
-                    // Если висит вебхук, сбрасываем его
+                    const meRes = await fetch(`https://api.telegram.org/bot${botToken}/getMe`, { signal: AbortSignal.timeout(4000) })
+                        .then((r) => r.json())
+                        .catch((e) => ({ error: e.message }));
+                    const whRes = await fetch(`https://api.telegram.org/bot${botToken}/getWebhookInfo`, { signal: AbortSignal.timeout(4000) })
+                        .then((r) => r.json())
+                        .catch((e) => ({ error: e.message }));
                     let webhookDeleted = false;
                     if (whRes && typeof whRes === 'object' && whRes.result?.url) {
-                        await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`);
+                        await fetch(`https://api.telegram.org/bot${botToken}/deleteWebhook?drop_pending_updates=false`, { signal: AbortSignal.timeout(4000) })
+                            .catch(() => { });
                         webhookDeleted = true;
                     }
-                    const updatesTest = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?limit=1&timeout=2`)
+                    const updatesTest = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?limit=1&timeout=2`, { signal: AbortSignal.timeout(4000) })
                         .then((r) => r.json())
                         .catch((e) => ({ error: e.message }));
                     diagData.telegramBot = {
@@ -54,7 +56,9 @@ export function startHealthServer(port = Number(process.env.PORT) || 8080) {
                     };
                 }
                 if (critToken) {
-                    const critMe = await fetch(`https://api.telegram.org/bot${critToken}/getMe`).then((r) => r.json()).catch((e) => ({ error: e.message }));
+                    const critMe = await fetch(`https://api.telegram.org/bot${critToken}/getMe`, { signal: AbortSignal.timeout(4000) })
+                        .then((r) => r.json())
+                        .catch((e) => ({ error: e.message }));
                     diagData.criticalBot = { me: critMe };
                 }
             }
