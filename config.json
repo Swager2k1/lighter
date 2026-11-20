@@ -392,7 +392,7 @@
       "id": "ORCL_W2",
       "symbol": "ORCL",
       "walletSlot": "w2",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_orcl_w2_short",
@@ -420,7 +420,7 @@
         }
       ],
       "createdAt": 1794912817439,
-      "updatedAt": 1794912817439
+      "updatedAt": 1795156677063
     },
     {
       "symbol": "XRP",
@@ -563,7 +563,7 @@
     "id": "ORCL_W2",
     "symbol": "ORCL",
     "walletSlot": "w2",
-    "active": true,
+    "active": false,
     "legs": [
       {
         "id": "rh_orcl_w2_short",
@@ -591,11 +591,6 @@
       }
     ],
     "createdAt": 1794912817439,
-    "updatedAt": 1794912817439
-  },
-  "telegram": {
-    "botToken": "7705285911:AAH3cgH7hzsX-t3gyzajTxuqionyjnljqHE",
-    "chatId": "405342714",
-    "criticalBotToken": "7882570217:AAFKRRADYDuOKruzFw3EW7JvvK6Ot0YCugk"
+    "updatedAt": 1795156677063
   }
 }
