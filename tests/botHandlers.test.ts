@@ -13,9 +13,9 @@ test('handleCalcCommand generates clear calculation response', () => {
   const reply = handleCalcCommand(['TSM', '1200', '24h']);
   assert.ok(reply.includes('TSM'));
   assert.ok(reply.includes('РЕКОМЕНДОВАННОЕ ПЛЕЧО'));
-  assert.ok(reply.includes('Robinhood Long: **$1200**'));
-  assert.ok(reply.includes('Robinhood Short: **$840**'));
-  assert.ok(reply.includes('Polymarket Short: **$360**'));
+  assert.ok(reply.includes('Core Long: **$600**'));
+  assert.ok(reply.includes('Robinhood Short: **$600**'));
+  assert.ok(reply.includes('Polymarket Short: **$600**'));
 });
 
 test('handlePolyWalletCommand validates and saves address', () => {

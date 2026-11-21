@@ -328,7 +328,7 @@ export function formatTopCardsMessage(params: {
       `• 🚀 **Pre-IPO & Low-OI пулы:**`,
       `  - **$OPENAI**, **$ANTHROPIC**, **$CRCL**, **$SHEIN** — низкий OI (макс. yield поинтов на $1k)`,
       `• 🛡 **Канонический Hedge Boost (2.5x):**`,
-      `  - Вектор Robinhood LONG + Arbitrum Core SHORT дает **2.5x** ко всем начислениям`,
+      `  - Вектор Robinhood SHORT + Arbitrum Core LONG дает **2.5x** ко всем начислениям`,
       ``
     );
   }
@@ -694,35 +694,35 @@ export async function scanCanonicalMarketMatrix(
         const macro = getAssetMacroRisk(sym);
 
         // Week 13+ Единое протокольное направление (2.5x Hedge Boost):
-        // Core SHORT + RH LONG для всех категорий (Crypto, Commodities, Pre-IPOs, Equities).
-        // Вход: RH Long (берем из rhAsks), Arb Short (продаем в arbBids)
-        // Выход: RH Short (продаем в rhBids), Arb Long (откупаем из arbAsks)
-        const sellSide = mode === 'open' ? arbBids : rhBids;
-        const buySide = mode === 'open' ? rhAsks : arbAsks;
+        // Core LONG + RH SHORT для всех категорий (Crypto, Commodities, Pre-IPOs, Equities).
+        // Вход: RH Short (берем из rhBids), Arb Long (продаем в arbAsks)
+        // Выход: RH Long (продаем в rhAsks), Arb Short (откупаем из arbBids)
+        const sellSide = mode === 'open' ? arbAsks : rhAsks;
+        const buySide = mode === 'open' ? rhBids : arbBids;
 
         const wallRhL1 = mode === 'open'
-          ? `$${rhAsks[0].price} ($${Math.round(rhAsks[0].price * rhAsks[0].size)})`
-          : `$${rhBids[0].price} ($${Math.round(rhBids[0].price * rhBids[0].size)})`;
+          ? `$${rhBids[0].price} ($${Math.round(rhBids[0].price * rhBids[0].size)})`
+          : `$${rhAsks[0].price} ($${Math.round(rhAsks[0].price * rhAsks[0].size)})`;
         const wallRhL2 = mode === 'open'
-          ? (rhAsks[1] ? `$${rhAsks[1].price} ($${Math.round(rhAsks[1].price * rhAsks[1].size)})` : '—')
-          : (rhBids[1] ? `$${rhBids[1].price} ($${Math.round(rhBids[1].price * rhBids[1].size)})` : '—');
+          ? (rhBids[1] ? `$${rhBids[1].price} ($${Math.round(rhBids[1].price * rhBids[1].size)})` : '—')
+          : (rhAsks[1] ? `$${rhAsks[1].price} ($${Math.round(rhAsks[1].price * rhAsks[1].size)})` : '—');
 
         const wallArbL1 = mode === 'open'
-          ? `$${arbBids[0].price} ($${Math.round(arbBids[0].price * arbBids[0].size)})`
-          : `$${arbAsks[0].price} ($${Math.round(arbAsks[0].price * arbAsks[0].size)})`;
+          ? `$${arbAsks[0].price} ($${Math.round(arbAsks[0].price * arbAsks[0].size)})`
+          : `$${arbBids[0].price} ($${Math.round(arbBids[0].price * arbBids[0].size)})`;
         const wallArbL2 = mode === 'open'
-          ? (arbBids[1] ? `$${arbBids[1].price} ($${Math.round(arbBids[1].price * arbBids[1].size)})` : '—')
-          : (arbAsks[1] ? `$${arbAsks[1].price} ($${Math.round(arbAsks[1].price * arbAsks[1].size)})` : '—');
+          ? (arbAsks[1] ? `$${arbAsks[1].price} ($${Math.round(arbAsks[1].price * arbAsks[1].size)})` : '—')
+          : (arbBids[1] ? `$${arbBids[1].price} ($${Math.round(arbBids[1].price * arbBids[1].size)})` : '—');
 
-        const rhL1Cash = mode === 'open' ? rhAsks[0].price * rhAsks[0].size : rhBids[0].price * rhBids[0].size;
-        const arbL1Cash = mode === 'open' ? arbBids[0].price * arbBids[0].size : arbAsks[0].price * arbAsks[0].size;
+        const rhL1Cash = mode === 'open' ? rhBids[0].price * rhBids[0].size : rhAsks[0].price * rhAsks[0].size;
+        const arbL1Cash = mode === 'open' ? arbAsks[0].price * arbAsks[0].size : arbBids[0].price * arbBids[0].size;
         const maxEntryWall = Math.round(Math.min(rhL1Cash, arbL1Cash));
 
         let edgeSpreadPct = 0.05;
-        if (mode === 'open' && arbBids[0].price > 0) {
-          edgeSpreadPct = parseFloat((((rhAsks[0].price - arbBids[0].price) / arbBids[0].price) * 100).toFixed(3));
-        } else if (rhBids[0].price > 0) {
-          edgeSpreadPct = parseFloat((((arbAsks[0].price - rhBids[0].price) / rhBids[0].price) * 100).toFixed(3));
+        if (mode === 'open' && arbAsks[0].price > 0) {
+          edgeSpreadPct = parseFloat((((rhBids[0].price - arbAsks[0].price) / arbAsks[0].price) * 100).toFixed(3));
+        } else if (rhAsks[0].price > 0) {
+          edgeSpreadPct = parseFloat((((arbBids[0].price - rhAsks[0].price) / rhAsks[0].price) * 100).toFixed(3));
         }
 
         const walk100 = simulateOrderbookWalk({

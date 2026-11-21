@@ -3,11 +3,17 @@ import { getMarketInfo, scanSharedMarkets } from '../services/marketScanner.js';
 import { evaluateHedgeRisk } from '../services/riskEngine.js';
 import { calculateSafeLeverage } from '../services/calculator.js';
 import { fetchLighterPositions } from '../connectors/lighter.js';
-import { loadConfig, saveHedgeConfig, updateWallets, getActiveHedges, deactivateHedge, FullConfig } from '../config.js';
-import { sleep, sleepByRange, getRandomNumber } from '../utils/sleep.js';
+import { loadConfig, updateWallets, getActiveHedges, deactivateHedge, FullConfig } from '../config.js';
 import { fetchLiveWalletEquity, calculateWalletRebalance, formatRebalanceReport, RebalanceResult } from '../services/rebalanceService.js';
 import { scanCanonicalMarketMatrix, calculateActiveHedgesExitReport } from '../services/marketMatrixService.js';
-import { activateHedgeOnchain, deactivateHedgeOnchain, parseOpenCommandArgs, parseCloseCommandArgs, getCurrentTradingWeek } from '../services/positionSyncService.js';
+import {
+  activateHedgeOnchain,
+  deactivateHedgeOnchain,
+  parseOpenCommandArgs,
+  parseCloseCommandArgs,
+  getCurrentTradingWeek,
+  reconcileHedgesFromOnchain,
+} from '../services/positionSyncService.js';
 
 
 export async function handleStatusCommand(hedge?: ThreeLegHedge): Promise<string> {
@@ -251,7 +257,7 @@ export function handleCalcCommand(args: string[]): string {
     `💬 *${rec.verdict}*`,
     ``,
     `⚖️ **Распределение депозита (дельта 0):**`,
-    `• Robinhood Long: **$${rec.split.leg1RobinhoodLong.margin}** (номинал $${rec.split.leg1RobinhoodLong.notional})`,
+    `• Core Long: **$${rec.split.leg1CoreLong.margin}** (номинал $${rec.split.leg1CoreLong.notional})`,
     `• Robinhood Short: **$${rec.split.leg2RobinhoodShort.margin}** (номинал $${rec.split.leg2RobinhoodShort.notional})`,
     `• Polymarket Short: **$${rec.split.leg3PolymarketShort.margin}** (номинал $${rec.split.leg3PolymarketShort.notional})`,
   ];
@@ -336,72 +342,12 @@ export function formatSpikeAlert(spike: SpikeAlert): string {
 export async function handleSyncCommand(
   onProgress?: (text: string) => Promise<void>
 ): Promise<string> {
-  const config = loadConfig();
-  const w1 = config.wallets.robinhoodWallet1?.trim();
-  const w2 = config.wallets.robinhoodWallet2?.trim();
-
-  if (!w1 || !w2) {
-    return [
-      `⚠️ **Кошельки не указаны в настройках!**`,
-      `Чтобы включить авто-синхронизацию, укажите адреса кошельков Robinhood в файле \`config.json\` (поля \`robinhoodWallet1\` и \`robinhoodWallet2\`).`,
-      ``,
-      `Для Polymarket укажите кошелек через команду \`/poly 0x...\`.`,
-    ].join('\n');
-  }
-
-  const symbol = config.currentHedge.symbol;
-  if (onProgress) {
-    await onProgress(`🔍 [1/2] Запрашиваю данные по кошельку Robinhood 1...`);
-  }
-
-  // 1. Запрос по первому кошельку через публичный эксплорер
-  const pos1 = await fetchLighterPositions(w1);
-  const foundPos1 = pos1.find((p) => p.symbol === symbol || p.symbol.includes(symbol));
-
-  // 2. Anti-Sybil рандомизированная задержка
-  const delaySec = getRandomNumber(15, 25);
   if (onProgress) {
     await onProgress(
-      `🛡 **Anti-Sybil защита:** Запрос Robinhood 1 выполнен.\nВыдерживаю естественную паузу **${delaySec} сек** перед запросом Robinhood 2...`
+      `🔍 Сверяю ончейн W1/W2 на Robinhood + Arbitrum Core...\nФантомы сниму, живые позиции обновлю в config + PnL.`
     );
   }
-  await sleep(delaySec * 1000);
-
-  // 3. Запрос по второму кошельку
-  const pos2 = await fetchLighterPositions(w2);
-  const foundPos2 = pos2.find((p) => p.symbol === symbol || p.symbol.includes(symbol));
-
-  const hedge = config.currentHedge;
-
-  if (foundPos1) {
-    hedge.legs[0].entryPrice = foundPos1.entryPrice;
-    hedge.legs[0].size = foundPos1.size;
-    hedge.legs[0].side = foundPos1.side;
-  }
-
-  if (foundPos2) {
-    hedge.legs[1].entryPrice = foundPos2.entryPrice;
-    hedge.legs[1].size = foundPos2.size;
-    hedge.legs[1].side = foundPos2.side;
-  }
-
-  hedge.active = true;
-  hedge.updatedAt = Date.now();
-  saveHedgeConfig(hedge);
-
-  const lines = [
-    `✅ **СИНХРОНИЗАЦИЯ УСПЕШНО ЗАВЕРШЕНА!**`,
-    `━━━━━━━━━━━━━━━━━━━━`,
-    `🛡 **Anti-Sybil защита:** между кошельками Robinhood выдержана пауза **${delaySec} сек**.`,
-    `📌 Активный рынок: **${symbol}**`,
-    ``,
-    `• Robinhood 1: ${foundPos1 ? `найдена позиция ${foundPos1.side.toUpperCase()} по $${foundPos1.entryPrice} (размер: ${foundPos1.size})` : 'позиция на бирже не найдена (сохранены параметры по умолчанию)'}`,
-    `• Robinhood 2: ${foundPos2 ? `найдена позиция ${foundPos2.side.toUpperCase()} по $${foundPos2.entryPrice} (размер: ${foundPos2.size})` : 'позиция на бирже не найдена (сохранены параметры по умолчанию)'}`,
-    ``,
-    `Связка взята на круглосуточный мониторинг. Проверьте статус через \`/status\`.`,
-  ];
-
-  return lines.join('\n');
+  return reconcileHedgesFromOnchain();
 }
 
 export async function handleRebalanceCommand(targetWalletArg?: string): Promise<string> {
@@ -494,5 +440,12 @@ export async function handleActiveHedgesExitCommand(configOverride?: FullConfig)
   return calculateActiveHedgesExitReport(configOverride);
 }
 
-export { activateHedgeOnchain, deactivateHedgeOnchain, parseOpenCommandArgs, parseCloseCommandArgs, getCurrentTradingWeek };
+export {
+  activateHedgeOnchain,
+  deactivateHedgeOnchain,
+  parseOpenCommandArgs,
+  parseCloseCommandArgs,
+  getCurrentTradingWeek,
+  reconcileHedgesFromOnchain,
+};
 

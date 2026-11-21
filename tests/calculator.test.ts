@@ -16,13 +16,13 @@ test('calculateSafeLeverage for TSM 24h horizon recommends 6x', () => {
   assert.ok(rec.recommendedLeverage >= 6, `Should recommend at least 6x for 24h, got ${rec.recommendedLeverage}x`);
   assert.ok(rec.distanceToLiqPct >= 10.0, 'Distance to liq should be >= 10%');
 
-  // Проверка баланса ног: 1200 Long = 840 Short RH + 360 Short Poly
-  assert.strictEqual(rec.split.leg1RobinhoodLong.margin, 1200);
-  assert.strictEqual(rec.split.leg2RobinhoodShort.margin, 840);
-  assert.strictEqual(rec.split.leg3PolymarketShort.margin, 360);
+  // Проверка баланса ног: 1200 Long = 600 Core Long + 600 RH Short
+  assert.strictEqual(rec.split.leg1CoreLong.margin, 600);
+  assert.strictEqual(rec.split.leg2RobinhoodShort.margin, 600);
+  assert.strictEqual(rec.split.leg3PolymarketShort.margin, 600);
   assert.strictEqual(
     rec.split.leg2RobinhoodShort.margin + rec.split.leg3PolymarketShort.margin,
-    rec.split.leg1RobinhoodLong.margin
+    rec.split.leg1CoreLong.margin * 2
   );
 });
 

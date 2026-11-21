@@ -155,9 +155,10 @@ export function updateWallets(wallets) {
 }
 export function getActiveHedges(config) {
     if (config.hedges && Array.isArray(config.hedges)) {
-        return config.hedges.filter((h) => h.active !== false);
+        // Strict: only explicit active === true (prevents phantom sirens from stale/undefined flags)
+        return config.hedges.filter((h) => h.active === true);
     }
-    if (config.currentHedge && config.currentHedge.active !== false) {
+    if (config.currentHedge && config.currentHedge.active === true) {
         return [config.currentHedge];
     }
     return [];

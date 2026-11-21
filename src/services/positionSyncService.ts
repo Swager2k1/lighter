@@ -22,6 +22,56 @@ export function getCurrentTradingWeek(): { week: string; period: string } {
   };
 }
 
+export interface MarginLeverageParams {
+  size: number;
+  entryPrice: number;
+  allocatedMargin?: number;
+  /** IMF as percent from Lighter API, e.g. 14.29 → ~7x */
+  initialMarginFraction?: number;
+  accountCollateral?: number;
+  fallbackLeverage?: number;
+}
+
+/**
+ * Safe margin/leverage from onchain signals.
+ * Rejects absurd leverage from tiny leftover collateral (the ORCL 422x bug).
+ */
+export function computeMarginAndLeverage(params: MarginLeverageParams): { margin: number; leverage: number } {
+  const notional = params.size * params.entryPrice;
+  const fallbackLev = params.fallbackLeverage && params.fallbackLeverage > 0 ? params.fallbackLeverage : 7;
+
+  if (params.allocatedMargin && params.allocatedMargin > 0 && notional > 0) {
+    const margin = parseFloat(params.allocatedMargin.toFixed(2));
+    const leverage = parseFloat((notional / margin).toFixed(2));
+    if (leverage >= 1 && leverage <= 20) {
+      return { margin, leverage };
+    }
+  }
+
+  if (params.initialMarginFraction && params.initialMarginFraction > 0 && notional > 0) {
+    const imfPct = params.initialMarginFraction;
+    // API may send 14.29 (%) or rarely a fraction < 1
+    const leverage = parseFloat((imfPct < 1 ? 1 / imfPct : 100 / imfPct).toFixed(2));
+    const margin = parseFloat((notional / leverage).toFixed(2));
+    if (leverage >= 1 && leverage <= 20) {
+      return { margin, leverage };
+    }
+  }
+
+  if (params.accountCollateral && params.accountCollateral > 0 && notional > 0) {
+    const margin = parseFloat(params.accountCollateral.toFixed(2));
+    const leverage = parseFloat((notional / margin).toFixed(2));
+    // Guard: ignore leftover dust collateral that implies insane leverage
+    if (leverage >= 1 && leverage <= 20) {
+      return { margin, leverage };
+    }
+  }
+
+  const leverage = fallbackLev;
+  const margin = Math.round(notional / leverage);
+  return { margin, leverage };
+}
+
 export function calculateEntryFriction(params: EntryFrictionParams): { frictionUsd: number; frictionPct: number } {
   const { size, notional } = params;
   let buyPrice = params.buyPrice;
@@ -174,7 +224,8 @@ export async function activateHedgeOnchain(
   targetWallet?: 'w1' | 'w2',
   manualSize?: number,
   manualPrice?: number,
-  manualLeverage?: number
+  manualLeverage?: number,
+  options?: { skipCsv?: boolean }
 ): Promise<string> {
   const config = loadConfig();
   const normSym = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '');
@@ -255,25 +306,24 @@ export async function activateHedgeOnchain(
   const arbSide: 'long' | 'short' = arbPos?.side || 'short';
 
   // 5. Определение маржи и плеча:
-  // Приоритет: явный manualLeverage -> реальный collateral из ончейна Lighter -> existing -> 7.92x
-  const notional = size * rhEntryPrice;
-  const onchainCollateral = rhPos?.accountCollateral || arbPos?.accountCollateral;
-
+  // Приоритет: manualLeverage -> allocated/IMF/collateral (с защитой от 422x) -> existing -> 7x
   let leverage: number;
   let margin: number;
 
   if (manualLeverage && manualLeverage > 0) {
     leverage = manualLeverage;
-    margin = Math.round(notional / leverage);
-  } else if (onchainCollateral && onchainCollateral > 0) {
-    margin = parseFloat(onchainCollateral.toFixed(2));
-    leverage = parseFloat((notional / margin).toFixed(2));
-  } else if (existingHedge?.legs[0]?.leverage) {
-    leverage = existingHedge.legs[0].leverage;
-    margin = existingHedge.legs[0].margin;
+    margin = Math.round((size * rhEntryPrice) / leverage);
   } else {
-    leverage = 7.92;
-    margin = Math.round(notional / leverage);
+    const computed = computeMarginAndLeverage({
+      size,
+      entryPrice: rhEntryPrice,
+      allocatedMargin: rhPos?.allocatedMargin || arbPos?.allocatedMargin,
+      initialMarginFraction: rhPos?.initialMarginFraction || arbPos?.initialMarginFraction,
+      accountCollateral: rhPos?.accountCollateral || arbPos?.accountCollateral,
+      fallbackLeverage: existingHedge?.legs[0]?.leverage || 7,
+    });
+    leverage = computed.leverage;
+    margin = computed.margin;
   }
 
   // 6. Цены ликвидации (из ончейна Lighter либо расчетные по MMR)
@@ -333,8 +383,9 @@ export async function activateHedgeOnchain(
   const { week, period } = getCurrentTradingWeek();
 
   // Определяем реальную сторону ног для точного расчета спреда
-  const longLeg = updatedHedge.legs.find((l) => l.side === 'long') || updatedHedge.legs[1];
-  const shortLeg = updatedHedge.legs.find((l) => l.side === 'short') || updatedHedge.legs[0];
+  // В новой логике: Core LONG + RH SHORT
+  const longLeg = updatedHedge.legs.find((l) => l.side === 'long') || updatedHedge.legs[0];
+  const shortLeg = updatedHedge.legs.find((l) => l.side === 'short') || updatedHedge.legs[1];
 
   const entryFriction = calculateEntryFriction({
     buyPrice: longLeg.entryPrice,
@@ -354,20 +405,22 @@ export async function activateHedgeOnchain(
     ? `Премия базиса: +$${Math.abs(entryFriction.frictionUsd)}`
     : `Трение спреда: -$${entryFriction.frictionUsd}`;
 
-  const csvRow = formatCsvEntryRow({
-    week,
-    period,
-    asset: normSym,
-    venue: targetName,
-    legDescription: `${normSym} Hedge`,
-    side: 'Delta-Neutral',
-    entryPrice: updatedHedge.legs[0].entryPrice,
-    size: updatedHedge.legs[0].size,
-    margin,
-    frictionUsd: entryFriction.frictionUsd,
-    notes: `Opened via /o ${normSym} (${nowFormatted}. ${frictionNote}, Leverage: ${leverage}x)`,
-  });
-  appendRowToCsv(csvRow);
+  if (!options?.skipCsv) {
+    const csvRow = formatCsvEntryRow({
+      week,
+      period,
+      asset: normSym,
+      venue: targetName,
+      legDescription: `${normSym} Hedge`,
+      side: 'Delta-Neutral',
+      entryPrice: updatedHedge.legs[0].entryPrice,
+      size: updatedHedge.legs[0].size,
+      margin,
+      frictionUsd: entryFriction.frictionUsd,
+      notes: `Opened via /o ${normSym} (${nowFormatted}. ${frictionNote}, Leverage: ${leverage}x)`,
+    });
+    appendRowToCsv(csvRow);
+  }
 
   const dataSourceNote =
     rhPos || arbPos
@@ -390,9 +443,96 @@ export async function activateHedgeOnchain(
     `• Нога Arb (${arbSide === 'short' ? 'Short' : 'Long'}): **${updatedHedge.legs[1].size} ${normSym}** по **$${updatedHedge.legs[1].entryPrice}** (${leverage}x) [Ликв: **$${updatedHedge.legs[1].liquidationPrice}**]`,
     `• Маржа: **$${margin}** | Плечо: **${leverage}x**`,
     `• Расчётный спред входа: **${frictionDisplay}**`,
-    `• Запись внесена в \`pnl_and_points_analysis.csv\``,
+    options?.skipCsv
+      ? `• CSV: без новой строки (reconcile / refresh)`
+      : `• Запись внесена в \`pnl_and_points_analysis.csv\``,
     `• 🚨 **Мониторинг ликвидаций и сирена: АКТИВИРОВАНЫ**`,
   ].join('\n');
+}
+
+/**
+ * Full onchain reconciliation for W1/W2 on RH + Arb.
+ * - Activates/refreshes hedges that exist onchain
+ * - Deactivates phantom hedges that are active in config but closed onchain
+ */
+export async function reconcileHedgesFromOnchain(): Promise<string> {
+  const config = loadConfig();
+  const w1 = config.wallets.robinhoodWallet1?.trim();
+  const w2 = config.wallets.robinhoodWallet2?.trim();
+
+  if (!w1 && !w2) {
+    return '⚠️ Кошельки не указаны в config.json — reconcile невозможен.';
+  }
+
+  const [w1Rh, w1Arb, w2Rh, w2Arb] = await Promise.all([
+    w1 ? fetchLighterPositions(w1, 'rh') : Promise.resolve([]),
+    w1 ? fetchLighterPositions(w1, 'arb') : Promise.resolve([]),
+    w2 ? fetchLighterPositions(w2, 'rh') : Promise.resolve([]),
+    w2 ? fetchLighterPositions(w2, 'arb') : Promise.resolve([]),
+  ]);
+
+  type Slot = 'w1' | 'w2';
+  const onchainBySlot: Record<Slot, Set<string>> = { w1: new Set(), w2: new Set() };
+
+  for (const p of [...w1Rh, ...w1Arb]) onchainBySlot.w1.add(p.symbol.toUpperCase());
+  for (const p of [...w2Rh, ...w2Arb]) onchainBySlot.w2.add(p.symbol.toUpperCase());
+
+  const lines: string[] = [
+    `🔄 **ONCHAIN RECONCILE**`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+  ];
+
+  const activated: string[] = [];
+  const refreshed: string[] = [];
+  const deactivated: string[] = [];
+
+  // 1. Deactivate phantoms: active in config, absent onchain
+  const active = (config.hedges || []).filter((h) => h.active === true);
+  for (const h of active) {
+    const slot: Slot = h.walletSlot === 'w2' ? 'w2' : 'w1';
+    const sym = h.symbol.toUpperCase();
+    if (!onchainBySlot[slot].has(sym)) {
+      const exitReply = await deactivateHedgeOnchain(sym, slot);
+      deactivated.push(`${sym}_${slot.toUpperCase()}`);
+      lines.push(`🛑 Закрыт фантом: **${sym} ${slot.toUpperCase()}** (нет на ончейне)`);
+      lines.push(exitReply.split('\n').slice(0, 3).join('\n'));
+    }
+  }
+
+  // 2. Activate / refresh every onchain symbol per wallet
+  for (const slot of ['w1', 'w2'] as Slot[]) {
+    const symbols = onchainBySlot[slot];
+    for (const sym of symbols) {
+      const fresh = loadConfig();
+      const existing = findHedge(fresh, sym, slot);
+      const alreadyActive = existing?.active === true;
+      const reply = await activateHedgeOnchain(sym, slot, undefined, undefined, undefined, {
+        // Skip CSV if already tracked OR if an open row already exists for this week (refresh)
+        skipCsv: alreadyActive,
+      });
+      if (alreadyActive) {
+        refreshed.push(`${sym}_${slot.toUpperCase()}`);
+        lines.push(`♻️ Обновлён: **${sym} ${slot.toUpperCase()}**`);
+      } else {
+        activated.push(`${sym}_${slot.toUpperCase()}`);
+        lines.push(`✅ Активирован с ончейна: **${sym} ${slot.toUpperCase()}**`);
+      }
+      const summaryLine = reply.split('\n').find((l) => l.includes('Нога RH'));
+      if (summaryLine) lines.push(summaryLine);
+    }
+  }
+
+  if (activated.length === 0 && refreshed.length === 0 && deactivated.length === 0) {
+    lines.push(`💤 Ончейн-позиций нет. Все связки выключены.`);
+  }
+
+  lines.push(``);
+  lines.push(
+    `Итого: активировано **${activated.length}**, обновлено **${refreshed.length}**, снято фантомов **${deactivated.length}**.`
+  );
+  lines.push(`Проверьте \`/status\`. Сирена смотрит только на active === true.`);
+
+  return lines.join('\n');
 }
 
 export async function deactivateHedgeOnchain(

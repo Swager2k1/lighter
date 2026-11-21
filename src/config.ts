@@ -57,8 +57,8 @@ export function loadConfig(): FullConfig {
       active: false,
       legs: [
         {
-          id: 'rh_long_1',
-          name: 'Robinhood 1 (Long)',
+          id: 'core_long_1',
+          name: 'Lighter Core (Long)',
           venue: 'lighter',
           side: 'long',
           margin: 1000,
@@ -165,9 +165,10 @@ export function updateWallets(wallets: Partial<AppConfig['wallets']>): void {
 
 export function getActiveHedges(config: FullConfig): ThreeLegHedge[] {
   if (config.hedges && Array.isArray(config.hedges)) {
-    return config.hedges.filter((h) => h.active !== false);
+    // Strict: only explicit active === true (prevents phantom sirens from stale/undefined flags)
+    return config.hedges.filter((h) => h.active === true);
   }
-  if (config.currentHedge && config.currentHedge.active !== false) {
+  if (config.currentHedge && config.currentHedge.active === true) {
     return [config.currentHedge];
   }
   return [];
