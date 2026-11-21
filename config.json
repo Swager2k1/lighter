@@ -494,7 +494,7 @@
       "id": "SKHY_W1",
       "symbol": "SKHY",
       "walletSlot": "w1",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_skhy_w1_short",
@@ -522,7 +522,7 @@
         }
       ],
       "createdAt": 1795204152530,
-      "updatedAt": 1795204152530
+      "updatedAt": 1795292904277
     },
     {
       "id": "BABA_W2",
