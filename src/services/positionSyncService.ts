@@ -302,8 +302,8 @@ export async function activateHedgeOnchain(
     existingHedge?.legs[1]?.entryPrice ||
     rhEntryPrice;
 
-  const rhSide: 'long' | 'short' = rhPos?.side || 'long';
-  const arbSide: 'long' | 'short' = arbPos?.side || 'short';
+  const rhSide: 'long' | 'short' = rhPos?.side || 'short';
+  const arbSide: 'long' | 'short' = arbPos?.side || 'long';
 
   // 5. Определение маржи и плеча:
   // Приоритет: manualLeverage -> allocated/IMF/collateral (с защитой от 422x) -> existing -> 7x
@@ -384,8 +384,8 @@ export async function activateHedgeOnchain(
 
   // Определяем реальную сторону ног для точного расчета спреда
   // В новой логике: Core LONG + RH SHORT
-  const longLeg = updatedHedge.legs.find((l) => l.side === 'long') || updatedHedge.legs[0];
-  const shortLeg = updatedHedge.legs.find((l) => l.side === 'short') || updatedHedge.legs[1];
+  const longLeg = updatedHedge.legs.find((l) => l.side === 'long') || updatedHedge.legs[1];
+  const shortLeg = updatedHedge.legs.find((l) => l.side === 'short') || updatedHedge.legs[0];
 
   const entryFriction = calculateEntryFriction({
     buyPrice: longLeg.entryPrice,

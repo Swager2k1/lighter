@@ -48,8 +48,8 @@ export function loadConfig() {
             active: false,
             legs: [
                 {
-                    id: 'rh_long_1',
-                    name: 'Robinhood 1 (Long)',
+                    id: 'core_long_1',
+                    name: 'Lighter Core (Long)',
                     venue: 'lighter',
                     side: 'long',
                     margin: 1000,

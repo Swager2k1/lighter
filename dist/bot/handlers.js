@@ -185,7 +185,7 @@ export function handleCalcCommand(args) {
         `💬 *${rec.verdict}*`,
         ``,
         `⚖️ **Распределение депозита (дельта 0):**`,
-        `• Robinhood Long: **$${rec.split.leg1RobinhoodLong.margin}** (номинал $${rec.split.leg1RobinhoodLong.notional})`,
+        `• Core Long: **$${rec.split.leg1CoreLong.margin}** (номинал $${rec.split.leg1CoreLong.notional})`,
         `• Robinhood Short: **$${rec.split.leg2RobinhoodShort.margin}** (номинал $${rec.split.leg2RobinhoodShort.notional})`,
         `• Polymarket Short: **$${rec.split.leg3PolymarketShort.margin}** (номинал $${rec.split.leg3PolymarketShort.notional})`,
     ];

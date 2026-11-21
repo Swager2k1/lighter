@@ -92,7 +92,8 @@ export interface CalculatorRecommendation {
   distanceToLiqPct: number;
   verdict: string;
   split: {
-    leg1RobinhoodLong: { margin: number; notional: number };
+    leg1CoreLong: { margin: number; notional: number };
+    leg1RobinhoodLong?: { margin: number; notional: number };
     leg2RobinhoodShort: { margin: number; notional: number };
     leg3PolymarketShort: { margin: number; notional: number };
   };

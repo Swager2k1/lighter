@@ -56,9 +56,9 @@ export function calculateSafeLeverage(symbol, totalLongMargin, timeframe = '24h'
         recommendedLeverage = 1;
     // Фактическая дистанция до ликвидации на Lighter при рекомендованном плече
     const actualDistancePct = (1 / recommendedLeverage - worstMmr) * 100;
-    // Расчет распределения маржи (70% на RH Short, 30% на Poly Short)
-    const rhShortMargin = Math.round(totalLongMargin * 0.7);
-    const polyShortMargin = totalLongMargin - rhShortMargin; // ровно 100% суммарно
+    // Расчет распределения маржи (50% на Core Long, 50% на RH Short)
+    const coreLongMargin = Math.round(totalLongMargin * 0.5);
+    const rhShortMargin = totalLongMargin - coreLongMargin; // ровно 100% суммарно
     let verdict = '';
     if (timeframe === '24h') {
         if (recommendedLeverage >= 6) {
@@ -81,17 +81,21 @@ export function calculateSafeLeverage(symbol, totalLongMargin, timeframe = '24h'
         distanceToLiqPct: parseFloat(actualDistancePct.toFixed(2)),
         verdict,
         split: {
+            leg1CoreLong: {
+                margin: coreLongMargin,
+                notional: coreLongMargin * recommendedLeverage,
+            },
             leg1RobinhoodLong: {
-                margin: totalLongMargin,
-                notional: totalLongMargin * recommendedLeverage,
+                margin: coreLongMargin,
+                notional: coreLongMargin * recommendedLeverage,
             },
             leg2RobinhoodShort: {
                 margin: rhShortMargin,
                 notional: rhShortMargin * recommendedLeverage,
             },
             leg3PolymarketShort: {
-                margin: polyShortMargin,
-                notional: polyShortMargin * recommendedLeverage,
+                margin: rhShortMargin, // Используем ту же маржу для демонстрации, но в реальности это будет другой актив
+                notional: rhShortMargin * recommendedLeverage,
             },
         },
     };

@@ -219,7 +219,7 @@ export function formatTopCardsMessage(params) {
         ``,
     ];
     if (mode === 'open') {
-        lines.push(`🔥 **БУСТЫ НЕДЕЛИ: LIGHTER POINTS PROGRAM**`, `━━━━━━━━━━━━━━━━━━━━`, `• ⚡️ **Earnings Boost (Квартальные отчеты недели):**`, `  - **$NVDA** (18.11 AMC | через 5д) — главный AI-отчет сезона. Закрыть до 17.11 20:00 UTC`, `  - **$BABA** (19.11 BMO | через 6д) — китайский e-commerce лидер. Закрыть до 18.11 20:00 UTC`, `  *(Дает максимальную долю распределения в еженедельном пуле Weekly Points)*`, `• 🚀 **Pre-IPO & Low-OI пулы:**`, `  - **$OPENAI**, **$ANTHROPIC**, **$CRCL**, **$SHEIN** — низкий OI (макс. yield поинтов на $1k)`, `• 🛡 **Канонический Hedge Boost (2.5x):**`, `  - Вектор Robinhood LONG + Arbitrum Core SHORT дает **2.5x** ко всем начислениям`, ``);
+        lines.push(`🔥 **БУСТЫ НЕДЕЛИ: LIGHTER POINTS PROGRAM**`, `━━━━━━━━━━━━━━━━━━━━`, `• ⚡️ **Earnings Boost (Квартальные отчеты недели):**`, `  - **$NVDA** (18.11 AMC | через 5д) — главный AI-отчет сезона. Закрыть до 17.11 20:00 UTC`, `  - **$BABA** (19.11 BMO | через 6д) — китайский e-commerce лидер. Закрыть до 18.11 20:00 UTC`, `  *(Дает максимальную долю распределения в еженедельном пуле Weekly Points)*`, `• 🚀 **Pre-IPO & Low-OI пулы:**`, `  - **$OPENAI**, **$ANTHROPIC**, **$CRCL**, **$SHEIN** — низкий OI (макс. yield поинтов на $1k)`, `• 🛡 **Канонический Hedge Boost (2.5x):**`, `  - Вектор Robinhood SHORT + Arbitrum Core LONG дает **2.5x** ко всем начислениям`, ``);
     }
     lines.push(`🏆 **${title}**`, `*(Приоритет: 🔥 Бусты недели → 📈 Акции по мин. Loss 100% → 🌐 Другие пары)*`, `━━━━━━━━━━━━━━━━━━━━`);
     topRows.forEach((r, idx) => {
@@ -472,32 +472,32 @@ export async function scanCanonicalMarketMatrix(mode = 'open', targetWalletArg) 
             const assetType = getAssetType(sym);
             const macro = getAssetMacroRisk(sym);
             // Week 13+ Единое протокольное направление (2.5x Hedge Boost):
-            // Core SHORT + RH LONG для всех категорий (Crypto, Commodities, Pre-IPOs, Equities).
-            // Вход: RH Long (берем из rhAsks), Arb Short (продаем в arbBids)
-            // Выход: RH Short (продаем в rhBids), Arb Long (откупаем из arbAsks)
-            const sellSide = mode === 'open' ? arbBids : rhBids;
-            const buySide = mode === 'open' ? rhAsks : arbAsks;
+            // Core LONG + RH SHORT для всех категорий (Crypto, Commodities, Pre-IPOs, Equities).
+            // Вход: RH Short (продаем в rhBids), Core Long (покупаем из arbAsks)
+            // Выход: Core Long закрытие (продаем в arbBids), RH Short закрытие (откупаем из rhAsks)
+            const sellSide = mode === 'open' ? rhBids : arbBids;
+            const buySide = mode === 'open' ? arbAsks : rhAsks;
             const wallRhL1 = mode === 'open'
-                ? `$${rhAsks[0].price} ($${Math.round(rhAsks[0].price * rhAsks[0].size)})`
-                : `$${rhBids[0].price} ($${Math.round(rhBids[0].price * rhBids[0].size)})`;
+                ? `$${rhBids[0].price} ($${Math.round(rhBids[0].price * rhBids[0].size)})`
+                : `$${rhAsks[0].price} ($${Math.round(rhAsks[0].price * rhAsks[0].size)})`;
             const wallRhL2 = mode === 'open'
-                ? (rhAsks[1] ? `$${rhAsks[1].price} ($${Math.round(rhAsks[1].price * rhAsks[1].size)})` : '—')
-                : (rhBids[1] ? `$${rhBids[1].price} ($${Math.round(rhBids[1].price * rhBids[1].size)})` : '—');
+                ? (rhBids[1] ? `$${rhBids[1].price} ($${Math.round(rhBids[1].price * rhBids[1].size)})` : '—')
+                : (rhAsks[1] ? `$${rhAsks[1].price} ($${Math.round(rhAsks[1].price * rhAsks[1].size)})` : '—');
             const wallArbL1 = mode === 'open'
-                ? `$${arbBids[0].price} ($${Math.round(arbBids[0].price * arbBids[0].size)})`
-                : `$${arbAsks[0].price} ($${Math.round(arbAsks[0].price * arbAsks[0].size)})`;
+                ? `$${arbAsks[0].price} ($${Math.round(arbAsks[0].price * arbAsks[0].size)})`
+                : `$${arbBids[0].price} ($${Math.round(arbBids[0].price * arbBids[0].size)})`;
             const wallArbL2 = mode === 'open'
-                ? (arbBids[1] ? `$${arbBids[1].price} ($${Math.round(arbBids[1].price * arbBids[1].size)})` : '—')
-                : (arbAsks[1] ? `$${arbAsks[1].price} ($${Math.round(arbAsks[1].price * arbAsks[1].size)})` : '—');
-            const rhL1Cash = mode === 'open' ? rhAsks[0].price * rhAsks[0].size : rhBids[0].price * rhBids[0].size;
-            const arbL1Cash = mode === 'open' ? arbBids[0].price * arbBids[0].size : arbAsks[0].price * arbAsks[0].size;
+                ? (arbAsks[1] ? `$${arbAsks[1].price} ($${Math.round(arbAsks[1].price * arbAsks[1].size)})` : '—')
+                : (arbBids[1] ? `$${arbBids[1].price} ($${Math.round(arbBids[1].price * arbBids[1].size)})` : '—');
+            const rhL1Cash = mode === 'open' ? rhBids[0].price * rhBids[0].size : rhAsks[0].price * rhAsks[0].size;
+            const arbL1Cash = mode === 'open' ? arbAsks[0].price * arbAsks[0].size : arbBids[0].price * arbBids[0].size;
             const maxEntryWall = Math.round(Math.min(rhL1Cash, arbL1Cash));
             let edgeSpreadPct = 0.05;
-            if (mode === 'open' && arbBids[0].price > 0) {
-                edgeSpreadPct = parseFloat((((rhAsks[0].price - arbBids[0].price) / arbBids[0].price) * 100).toFixed(3));
-            }
-            else if (rhBids[0].price > 0) {
+            if (mode === 'open' && arbAsks[0]?.price > 0 && rhBids[0]?.price > 0) {
                 edgeSpreadPct = parseFloat((((arbAsks[0].price - rhBids[0].price) / rhBids[0].price) * 100).toFixed(3));
+            }
+            else if (rhAsks[0]?.price > 0 && arbBids[0]?.price > 0) {
+                edgeSpreadPct = parseFloat((((rhAsks[0].price - arbBids[0].price) / arbBids[0].price) * 100).toFixed(3));
             }
             const walk100 = simulateOrderbookWalk({
                 targetNotional: sizing.notional100Pct,

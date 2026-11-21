@@ -99,6 +99,10 @@ export function calculateSafeLeverage(
         margin: coreLongMargin,
         notional: coreLongMargin * recommendedLeverage,
       },
+      leg1RobinhoodLong: {
+        margin: coreLongMargin,
+        notional: coreLongMargin * recommendedLeverage,
+      },
       leg2RobinhoodShort: {
         margin: rhShortMargin,
         notional: rhShortMargin * recommendedLeverage,

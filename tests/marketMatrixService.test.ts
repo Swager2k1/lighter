@@ -42,6 +42,29 @@ test('simulateOrderbookWalk calculates market loss correctly for given depth', (
   assert.ok(walk.lossPct > 0);
 });
 
+test('simulateOrderbookWalk calculates exit loss correctly (close mode: RH Short cover, Arb Long sell)', () => {
+  const rhAsks: OrderbookLevel[] = [
+    { price: 101, size: 50 },
+    { price: 102, size: 100 },
+  ];
+  const arbBids: OrderbookLevel[] = [
+    { price: 100, size: 50 },
+    { price: 99, size: 100 },
+  ];
+
+  const exitWalk = simulateOrderbookWalk({
+    targetNotional: 10000,
+    sellSideLevels: arbBids, // Arb Long exit: sell into bids
+    buySideLevels: rhAsks,   // RH Short exit: buy from asks
+  });
+
+  assert.equal(exitWalk.exhausted, false);
+  assert.ok(exitWalk.avgSellPrice <= 100);
+  assert.ok(exitWalk.avgBuyPrice >= 101);
+  assert.ok(exitWalk.lossUsd > 0);
+  assert.ok(exitWalk.lossPct > 0);
+});
+
 test('sortMarketMatrixRows prioritizes Boost -> Stocks (by loss100Pct) -> Other pairs', () => {
   const rowCrypto: MarketMatrixRow = {
     symbol: 'BTC',

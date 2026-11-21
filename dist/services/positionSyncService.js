@@ -220,8 +220,8 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
         (manualPrice ? manualPrice * 1.0005 : undefined) ||
         existingHedge?.legs[1]?.entryPrice ||
         rhEntryPrice;
-    const rhSide = rhPos?.side || 'long';
-    const arbSide = arbPos?.side || 'short';
+    const rhSide = rhPos?.side || 'short';
+    const arbSide = arbPos?.side || 'long';
     // 5. Определение маржи и плеча:
     // Приоритет: manualLeverage -> allocated/IMF/collateral (с защитой от 422x) -> existing -> 7x
     let leverage;
@@ -288,6 +288,7 @@ export async function activateHedgeOnchain(symbol, targetWallet, manualSize, man
     // 7. Логирование в CSV
     const { week, period } = getCurrentTradingWeek();
     // Определяем реальную сторону ног для точного расчета спреда
+    // В новой логике: Core LONG + RH SHORT
     const longLeg = updatedHedge.legs.find((l) => l.side === 'long') || updatedHedge.legs[1];
     const shortLeg = updatedHedge.legs.find((l) => l.side === 'short') || updatedHedge.legs[0];
     const entryFriction = calculateEntryFriction({
