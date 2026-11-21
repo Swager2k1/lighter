@@ -557,40 +557,74 @@
       ],
       "createdAt": 1794587595532,
       "updatedAt": 1794905855911
+    },
+    {
+      "id": "ANT_W2",
+      "symbol": "ANT",
+      "walletSlot": "w2",
+      "active": true,
+      "legs": [
+        {
+          "id": "rh_ant_w2_short",
+          "name": "Wallet 2 (W2) (Short)",
+          "venue": "lighter",
+          "side": "short",
+          "margin": 2374.18,
+          "entryPrice": 87.11,
+          "leverage": 6.87,
+          "size": 187.3,
+          "liquidationPrice": 94.14,
+          "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        },
+        {
+          "id": "core_ant_w2_long",
+          "name": "Lighter Core (Wallet 2 (W2)) (Long)",
+          "venue": "lighter",
+          "side": "long",
+          "margin": 2374.18,
+          "entryPrice": 87.27,
+          "leverage": 6.87,
+          "size": 187.3,
+          "liquidationPrice": 79.39,
+          "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        }
+      ],
+      "createdAt": 1795245442109,
+      "updatedAt": 1795245442109
     }
   ],
   "currentHedge": {
-    "id": "SKHY_W1",
-    "symbol": "SKHY",
-    "walletSlot": "w1",
+    "id": "ANT_W2",
+    "symbol": "ANT",
+    "walletSlot": "w2",
     "active": true,
     "legs": [
       {
-        "id": "rh_skhy_w1_short",
-        "name": "Wallet 1 (W1) (Short)",
+        "id": "rh_ant_w2_short",
+        "name": "Wallet 2 (W2) (Short)",
         "venue": "lighter",
         "side": "short",
-        "margin": 9234.54,
-        "entryPrice": 104.92,
+        "margin": 2374.18,
+        "entryPrice": 87.11,
         "leverage": 6.87,
-        "size": 604.5,
-        "liquidationPrice": 113.39,
-        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        "size": 187.3,
+        "liquidationPrice": 94.14,
+        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
       },
       {
-        "id": "core_skhy_w1_long",
-        "name": "Lighter Core (Wallet 1 (W1)) (Long)",
+        "id": "core_ant_w2_long",
+        "name": "Lighter Core (Wallet 2 (W2)) (Long)",
         "venue": "lighter",
         "side": "long",
-        "margin": 9234.54,
-        "entryPrice": 105.28,
+        "margin": 2374.18,
+        "entryPrice": 87.27,
         "leverage": 6.87,
-        "size": 604.5,
-        "liquidationPrice": 95.74,
-        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        "size": 187.3,
+        "liquidationPrice": 79.39,
+        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
       }
     ],
-    "createdAt": 1795204152530,
-    "updatedAt": 1795204152530
+    "createdAt": 1795245442109,
+    "updatedAt": 1795245442109
   }
 }
