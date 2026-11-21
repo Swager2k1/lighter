@@ -83,38 +83,38 @@
       "id": "PLTR_W2"
     },
     {
+      "id": "AMD_W1",
       "symbol": "AMD",
-      "active": false,
+      "walletSlot": "w1",
+      "active": true,
       "legs": [
         {
-          "id": "rh_amd_short",
+          "id": "rh_amd_w1_short",
           "name": "Wallet 1 (W1) (Short)",
           "venue": "lighter",
           "side": "short",
-          "margin": 6401.92,
-          "entryPrice": 508.62,
-          "leverage": 6.91,
-          "size": 87,
-          "liquidationPrice": 549.25,
+          "margin": 8989.84,
+          "entryPrice": 440.37,
+          "leverage": 7,
+          "size": 142.9,
+          "liquidationPrice": 475.62,
           "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
         },
         {
-          "id": "core_amd_long",
+          "id": "core_amd_w1_long",
           "name": "Lighter Core (Wallet 1 (W1)) (Long)",
           "venue": "lighter",
           "side": "long",
-          "margin": 6401.92,
-          "entryPrice": 509.13,
-          "leverage": 6.91,
-          "size": 87,
-          "liquidationPrice": 463.41,
+          "margin": 8989.84,
+          "entryPrice": 440.64,
+          "leverage": 7,
+          "size": 142.9,
+          "liquidationPrice": 400.9,
           "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
         }
       ],
-      "createdAt": 1792436000000,
-      "updatedAt": 1793630558075,
-      "walletSlot": "w1",
-      "id": "AMD_W1"
+      "createdAt": 1795294934562,
+      "updatedAt": 1795294934562
     },
     {
       "symbol": "BABA",
@@ -594,37 +594,37 @@
     }
   ],
   "currentHedge": {
-    "id": "ANT_W2",
-    "symbol": "ANT",
-    "walletSlot": "w2",
+    "id": "AMD_W1",
+    "symbol": "AMD",
+    "walletSlot": "w1",
     "active": true,
     "legs": [
       {
-        "id": "rh_ant_w2_short",
-        "name": "Wallet 2 (W2) (Short)",
+        "id": "rh_amd_w1_short",
+        "name": "Wallet 1 (W1) (Short)",
         "venue": "lighter",
         "side": "short",
-        "margin": 2374.18,
-        "entryPrice": 87.11,
-        "leverage": 6.87,
-        "size": 187.3,
-        "liquidationPrice": 94.14,
-        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        "margin": 8989.84,
+        "entryPrice": 440.37,
+        "leverage": 7,
+        "size": 142.9,
+        "liquidationPrice": 475.62,
+        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       },
       {
-        "id": "core_ant_w2_long",
-        "name": "Lighter Core (Wallet 2 (W2)) (Long)",
+        "id": "core_amd_w1_long",
+        "name": "Lighter Core (Wallet 1 (W1)) (Long)",
         "venue": "lighter",
         "side": "long",
-        "margin": 2374.18,
-        "entryPrice": 87.27,
-        "leverage": 6.87,
-        "size": 187.3,
-        "liquidationPrice": 79.39,
-        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        "margin": 8989.84,
+        "entryPrice": 440.64,
+        "leverage": 7,
+        "size": 142.9,
+        "liquidationPrice": 400.9,
+        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       }
     ],
-    "createdAt": 1795245442109,
-    "updatedAt": 1795245442109
+    "createdAt": 1795294934562,
+    "updatedAt": 1795294934562
   }
 }
