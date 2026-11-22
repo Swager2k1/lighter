@@ -494,18 +494,18 @@
       "id": "SKHY_W1",
       "symbol": "SKHY",
       "walletSlot": "w1",
-      "active": false,
+      "active": true,
       "legs": [
         {
           "id": "rh_skhy_w1_short",
           "name": "Wallet 1 (W1) (Short)",
           "venue": "lighter",
           "side": "short",
-          "margin": 9234.54,
-          "entryPrice": 104.92,
-          "leverage": 6.87,
-          "size": 604.5,
-          "liquidationPrice": 113.39,
+          "margin": 8964.45,
+          "entryPrice": 109.82,
+          "leverage": 7,
+          "size": 571.4,
+          "liquidationPrice": 118.6,
           "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
         },
         {
@@ -513,16 +513,16 @@
           "name": "Lighter Core (Wallet 1 (W1)) (Long)",
           "venue": "lighter",
           "side": "long",
-          "margin": 9234.54,
-          "entryPrice": 105.28,
-          "leverage": 6.87,
-          "size": 604.5,
-          "liquidationPrice": 95.74,
+          "margin": 8964.45,
+          "entryPrice": 109.87,
+          "leverage": 7,
+          "size": 571.4,
+          "liquidationPrice": 99.97,
           "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
         }
       ],
-      "createdAt": 1795204152530,
-      "updatedAt": 1795292904277
+      "createdAt": 1795380912266,
+      "updatedAt": 1795380912266
     },
     {
       "id": "BABA_W2",
@@ -594,37 +594,37 @@
     }
   ],
   "currentHedge": {
-    "id": "AMD_W1",
-    "symbol": "AMD",
+    "id": "SKHY_W1",
+    "symbol": "SKHY",
     "walletSlot": "w1",
-    "active": false,
+    "active": true,
     "legs": [
       {
-        "id": "rh_amd_w1_short",
+        "id": "rh_skhy_w1_short",
         "name": "Wallet 1 (W1) (Short)",
         "venue": "lighter",
         "side": "short",
-        "margin": 8989.84,
-        "entryPrice": 440.37,
+        "margin": 8964.45,
+        "entryPrice": 109.82,
         "leverage": 7,
-        "size": 142.9,
-        "liquidationPrice": 475.62,
+        "size": 571.4,
+        "liquidationPrice": 118.6,
         "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       },
       {
-        "id": "core_amd_w1_long",
+        "id": "core_skhy_w1_long",
         "name": "Lighter Core (Wallet 1 (W1)) (Long)",
         "venue": "lighter",
         "side": "long",
-        "margin": 8989.84,
-        "entryPrice": 440.64,
+        "margin": 8964.45,
+        "entryPrice": 109.87,
         "leverage": 7,
-        "size": 142.9,
-        "liquidationPrice": 400.9,
+        "size": 571.4,
+        "liquidationPrice": 99.97,
         "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       }
     ],
-    "createdAt": 1795294934562,
-    "updatedAt": 1795378685014
+    "createdAt": 1795380912266,
+    "updatedAt": 1795380912266
   }
 }
