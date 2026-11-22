@@ -86,7 +86,7 @@
       "id": "AMD_W1",
       "symbol": "AMD",
       "walletSlot": "w1",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_amd_w1_short",
@@ -114,7 +114,7 @@
         }
       ],
       "createdAt": 1795294934562,
-      "updatedAt": 1795294934562
+      "updatedAt": 1795378685014
     },
     {
       "symbol": "BABA",
@@ -597,7 +597,7 @@
     "id": "AMD_W1",
     "symbol": "AMD",
     "walletSlot": "w1",
-    "active": true,
+    "active": false,
     "legs": [
       {
         "id": "rh_amd_w1_short",
@@ -625,6 +625,6 @@
       }
     ],
     "createdAt": 1795294934562,
-    "updatedAt": 1795294934562
+    "updatedAt": 1795378685014
   }
 }
