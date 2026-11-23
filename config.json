@@ -562,7 +562,7 @@
       "id": "ANT_W2",
       "symbol": "ANT",
       "walletSlot": "w2",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_ant_w2_short",
@@ -590,7 +590,7 @@
         }
       ],
       "createdAt": 1795245442109,
-      "updatedAt": 1795245442109
+      "updatedAt": 1795425375430
     }
   ],
   "currentHedge": {
