@@ -596,7 +596,7 @@
       "id": "AMD_W2",
       "symbol": "AMD",
       "walletSlot": "w2",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_amd_w2_short",
@@ -624,7 +624,7 @@
         }
       ],
       "createdAt": 1795428703709,
-      "updatedAt": 1795428703709
+      "updatedAt": 1795530985407
     }
   ],
   "currentHedge": {
