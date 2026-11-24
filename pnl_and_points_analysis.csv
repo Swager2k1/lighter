@@ -166,3 +166,4 @@ Week 10,13.11 - 20.11,AMD,Wallet 2 (W2),AMD Hedge,Delta-Neutral,448.98,-,36.34,2
 Week 10,13.11 - 20.11,SKHY,Wallet 1 (W1),SKHY Closed Hedge (W1),Delta-Neutral,109.82,118.92,571.4,17928.9,17928.9,-,-28.57,-28.57,0,-,-,"Closed via /c SKHY (W1) (17.1ч (с 22.11, 20:55 по 23.11, 14:01). Exit: $118.92, Net PnL: -$28.57)"
 Week 10,13.11 - 20.11,INTC,Wallet 1 (W1),INTC Hedge,Delta-Neutral,56.07,-,1087.8,8713.28,8713.28,-,0,-41.34,0,-,-,"Opened via /o INTC (24.11, 12:42. Трение спреда: -$41.34, Leverage: 7x)"
 Week 10,13.11 - 20.11,AMD,Wallet 2 (W2),AMD Closed Hedge (W2),Delta-Neutral,448.98,410.04,36.34,4661.7,4661.7,-,-16.72,-16.72,0,-,-,"Closed via /c AMD (W2) (28.4ч (с 23.11, 10:11 по 24.11, 14:36). Exit: $410.04, Net PnL: -$16.72)"
+Week 10,13.11 - 20.11,AMD,Wallet 2 (W2),AMD Hedge,Delta-Neutral,410.5,-,39,2287.07,2287.07,-,0,+38.61,0,-,-,"Opened via /o AMD (24.11, 15:15. Премия базиса: +$38.61, Leverage: 7x)"
