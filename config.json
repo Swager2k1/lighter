@@ -358,7 +358,7 @@
       "id": "SKHY_W2",
       "symbol": "SKHY",
       "walletSlot": "w2",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_skhy_w2_short",
@@ -386,7 +386,7 @@
         }
       ],
       "createdAt": 1795628073240,
-      "updatedAt": 1795628073240
+      "updatedAt": 1795677651299
     },
     {
       "id": "ORCL_W2",
@@ -631,7 +631,7 @@
     "id": "SKHY_W2",
     "symbol": "SKHY",
     "walletSlot": "w2",
-    "active": true,
+    "active": false,
     "legs": [
       {
         "id": "rh_skhy_w2_short",
@@ -659,6 +659,6 @@
       }
     ],
     "createdAt": 1795628073240,
-    "updatedAt": 1795628073240
+    "updatedAt": 1795677651299
   }
 }
