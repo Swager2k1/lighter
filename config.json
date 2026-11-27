@@ -188,7 +188,7 @@
       "id": "INTC_W1",
       "symbol": "INTC",
       "walletSlot": "w1",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_intc_w1_short",
@@ -216,7 +216,7 @@
         }
       ],
       "createdAt": 1795704205315,
-      "updatedAt": 1795704205315
+      "updatedAt": 1795786754153
     },
     {
       "symbol": "TRX",
@@ -631,7 +631,7 @@
     "id": "INTC_W1",
     "symbol": "INTC",
     "walletSlot": "w1",
-    "active": true,
+    "active": false,
     "legs": [
       {
         "id": "rh_intc_w1_short",
@@ -659,6 +659,6 @@
       }
     ],
     "createdAt": 1795704205315,
-    "updatedAt": 1795704205315
+    "updatedAt": 1795786754153
   }
 }
