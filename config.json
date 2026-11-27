@@ -358,7 +358,7 @@
       "id": "SKHY_W2",
       "symbol": "SKHY",
       "walletSlot": "w2",
-      "active": true,
+      "active": false,
       "legs": [
         {
           "id": "rh_skhy_w2_short",
@@ -386,7 +386,7 @@
         }
       ],
       "createdAt": 1795680719767,
-      "updatedAt": 1795680719767
+      "updatedAt": 1795770718479
     },
     {
       "id": "ORCL_W2",
