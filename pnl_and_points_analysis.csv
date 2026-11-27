@@ -175,3 +175,4 @@ Week 10,13.11 - 20.11,SKHY,Wallet 2 (W2),SKHY Closed Hedge (W2),Delta-Neutral,10
 Week 10,13.11 - 20.11,SKHY,Wallet 2 (W2),SKHY Hedge,Delta-Neutral,111.73,-,138,2202.68,2202.68,-,0,-22.08,0,-,-,"Opened via /o SKHY (26.11, 08:11. Трение спреда: -$22.08, Leverage: 7x)"
 Week 10,13.11 - 20.11,INTC,Wallet 1 (W1),INTC Closed Hedge (W1),Delta-Neutral,52.06,55.32,1168,17373.16,17373.16,-,-63.07,-63.07,0,-,-,"Closed via /c INTC (W1) (23.9ч (с 25.11, 13:50 по 26.11, 13:45). Exit: $55.32, Net PnL: -$63.07)"
 Week 10,13.11 - 20.11,INTC,Wallet 1 (W1),INTC Hedge,Delta-Neutral,54.99,-,1073.7645,8435.19,8435.19,-,0,-97.71,0,-,-,"Opened via /o INTC (26.11, 14:43. Трение спреда: -$97.71, Leverage: 7x)"
+Week 10,13.11 - 20.11,SKHY,Wallet 2 (W2),SKHY Closed Hedge (W2),Delta-Neutral,111.73,117.93,138,4405.36,4405.36,-,-22.08,-22.08,0,-,-,"Closed via /c SKHY (W2) (25ч (с 26.11, 08:11 по 27.11, 09:11). Exit: $117.93, Net PnL: -$22.08)"
