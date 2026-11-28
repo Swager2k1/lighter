@@ -222,7 +222,7 @@ export function formatTopCardsMessage(params) {
         ``,
     ];
     if (mode === 'open') {
-        lines.push('RH SHORT + Core LONG. Оценка по снимкам стаканов, без комиссий и funding. Количество на обеих ногах одинаковое. Сценарий предполагает установленное плечо 7×.', '');
+        lines.push('RH SHORT + Core LONG. Оценка предполагает одновременный вход по двум стаканам при плече 7×, без комиссий и funding. Между исполнениями ног спред может измениться.', '');
     }
     lines.push(`🏆 *${title}*`, `Сначала доступные сценарии 100%, затем рынки с расчётом на 50%.`, `━━━━━━━━━━━━━━━━━━━━`);
     if (!topRows.length)
@@ -238,7 +238,7 @@ export function formatTopCardsMessage(params) {
         const half = r.availableHalf === false
             ? (r.halfDepth === false ? 'недостаточно глубины' : 'оценка недоступна')
             : formatScenarioLoss(r.loss50Usd, r.loss50Pct);
-        lines.push(`${idx + 1}. *$${r.symbol}* ${categoryBadge} (${r.earningsText})`, `   🔹 *100% — полный объём*   *${full}*`, `   🔸 *50% — половина объёма*   *${half}*`, `   • OI RH: *${formatCompactUsd(r.oiRobinhoodUsd)}* 🟢 | OI Arb: *${formatCompactUsd(r.oiArbitrumUsd)}*`, `   • Стенки RH/Arb: *${r.wallRhL1}* / *${r.wallArbL1}* (макс 1 стенка: $${r.maxEntryWallUsd})`, `   • Спред краёв: *${r.edgeSpreadPct}%*`, ``);
+        lines.push(`${idx + 1}. *$${r.symbol}* ${categoryBadge} (${r.earningsText})`, `   🔹 *100% — полный объём*   *${full}*${r.availableFull !== false && r.fullSize ? ' · ' + r.fullSize + ' ' + r.symbol : ''}`, `   🔸 *50% — половина объёма*   *${half}*${r.availableHalf !== false && r.halfSize ? ' · ' + r.halfSize + ' ' + r.symbol : ''}`, ...(r.observedAt ? [`   • Стаканы получены в ${r.observedAt.slice(11, 19)} UTC`] : []), `   • OI RH: *${formatCompactUsd(r.oiRobinhoodUsd)}* 🟢 | OI Arb: *${formatCompactUsd(r.oiArbitrumUsd)}*`, `   • Стенки RH/Arb: *${r.wallRhL1}* / *${r.wallArbL1}* (макс 1 стенка: $${r.maxEntryWallUsd})`, `   • Спред краёв: *${r.edgeSpreadPct}%*`, ``);
     });
     lines.push(`📎 *Полная каноническая матрица по всем инструментам прикреплена в JSON файле ниже.*`);
     return lines.join('\n');
@@ -281,6 +281,8 @@ export function generateCanonicalJsonFile(rows, sizing, wallet, mode = 'open') {
             symbol: r.symbol,
             loss_market_100pct: r.availableFull === false ? null : formatScenarioLoss(r.loss100Usd, r.loss100Pct),
             loss_market_50pct: r.availableHalf === false ? null : formatScenarioLoss(r.loss50Usd, r.loss50Pct),
+            estimated_prices_100pct: r.availableFull === false ? null : r.fullPrices ?? null,
+            estimated_prices_50pct: r.availableHalf === false ? null : r.halfPrices ?? null,
             type: r.type,
             is_stock: r.isStock,
             has_boost: r.hasEarningsBoost,
@@ -307,6 +309,7 @@ export function generateCanonicalJsonFile(rows, sizing, wallet, mode = 'open') {
         wallet,
         direction: mode === 'open' ? 'RH SHORT / Core LONG' : 'RH buy / Core sell',
         includes_fees_or_funding: false,
+        estimate_assumption: 'Одновременное исполнение двух ног по видимой глубине на момент получения стаканов. Между сделками цены и доступный объём могут измениться.',
         portfolio_equity_usd: Number.isFinite(sizing.totalEquity) ? sizing.totalEquity : null,
         margin_per_leg_100pct_usd: sizing.margin100Pct,
         notional_100pct_7x_usd: sizing.notional100Pct,
@@ -551,6 +554,8 @@ export async function scanCanonicalMarketMatrix(mode = 'open', targetWalletArg) 
                 unavailableReason,
                 fullSize: walk100.baseQuantity,
                 halfSize: walk50.baseQuantity,
+                fullPrices: { sell: walk100.avgSellPrice, buy: walk100.avgBuyPrice },
+                halfPrices: { sell: walk50.avgSellPrice, buy: walk50.avgBuyPrice },
                 observedAt: new Date().toISOString(),
             });
         }));
@@ -607,7 +612,7 @@ export async function calculateActiveHedgesExitReport(configOverride) {
             }
             lines.push(...positions.map((position, index) => {
                 const venue = index === 0 ? 'RH' : 'Core';
-                return position ? `• ${venue} ${position.side.toUpperCase()}: ${position.size} по $${position.entryPrice}` : `• ${venue}: позиция уже закрыта`;
+                return position ? `• ${venue} ${position.side.toUpperCase()}: ${position.size} по $${Number(position.entryPrice.toPrecision(12))}${position.entryPriceRounded ? ' (округлённая цена входа)' : ''}` : `• ${venue}: позиция уже закрыта`;
             }));
             for (const fraction of [1, 0.5]) {
                 lines.push(fraction === 1 ? '**Полное закрытие (100%)**' : '**Половина позиции (50%)**');

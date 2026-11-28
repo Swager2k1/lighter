@@ -14,6 +14,7 @@ export interface LighterPosition {
   symbol: string;
   side: 'long' | 'short';
   entryPrice: number;
+  entryPriceRounded?: boolean;
   size: number;
   pnl: number;
   marketIndex: number;
@@ -173,10 +174,19 @@ export async function readLighterAccount(address: string, venue: LighterVenue) {
     if (!Number.isFinite(size)) throw new Error('Invalid Lighter position quantity');
     markets.set(symbol, raw.market_id);
     if (!size) continue;
-    const entryPrice = Number(raw.avg_entry_price);
-    if (!(entryPrice > 0) || (raw.sign !== -1 && raw.sign !== 1)) throw new Error('Invalid Lighter open position');
+    const displayPrice = Number(raw.avg_entry_price);
+    if (!(displayPrice > 0 && Number.isFinite(displayPrice)) || (raw.sign !== -1 && raw.sign !== 1)) throw new Error('Invalid Lighter open position');
+    // Both amounts are from the same account snapshot. uPnL = sign * (mark value - entry cost).
+    const value = Number(raw.position_value);
+    const pnl = Number(raw.unrealized_pnl);
+    const costPrice = (value - raw.sign * pnl) / size;
+    const tick = 10 ** -(raw.avg_entry_price.split('.')[1]?.length ?? 0);
+    const useCostPrice = value > 0 && String(raw.unrealized_pnl ?? '').trim() !== '' &&
+      costPrice > 0 && Math.abs(costPrice - displayPrice) <= tick + Number.EPSILON * displayPrice;
     positions.push({
-      symbol, size, entryPrice, sizeDecimals: raw.position.split('.')[1]?.length ?? 0,
+      symbol, size, entryPrice: useCostPrice && Math.abs(costPrice - displayPrice) > Number.EPSILON * displayPrice
+        ? costPrice : displayPrice, entryPriceRounded: !useCostPrice,
+      sizeDecimals: raw.position.split('.')[1]?.length ?? 0,
       side: raw.sign === -1 ? 'short' : 'long',
       pnl: Number(raw.unrealized_pnl) || 0, marketIndex: raw.market_id,
       liquidationPrice: Number(raw.liquidation_price) || 0,

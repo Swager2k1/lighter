@@ -221,6 +221,9 @@ test('generateCanonicalJsonFile produces valid structured JSON with boosts, stoc
   };
 
   const sampleStock: MarketMatrixRow = {
+    fullPrices: { sell: 420.50123, buy: 420.71234 },
+    halfPrices: { sell: 420.51, buy: 420.70 },
+    observedAt: '2026-11-28T15:52:32.225Z',
     symbol: 'MSFT',
     type: 'Stock',
     isStock: true,
@@ -291,11 +294,14 @@ test('generateCanonicalJsonFile produces valid structured JSON with boosts, stoc
       ['loss_market_100pct', 'loss_market_50pct']);
     assert.equal(quote.loss_market_100pct, '-$18.40 (0.050%)');
     assert.equal(quote.loss_market_50pct, '-$9.10 (0.050%)');
+    assert.deepEqual(quote.estimated_prices_100pct, sampleStock.fullPrices);
+    assert.deepEqual(quote.estimated_prices_50pct, sampleStock.halfPrices);
   }
 
   const halfOnly = { ...sampleStock, availableFull: false, fullDepth: false, availableHalf: true, halfDepth: true };
   const halfQuote = JSON.parse(generateCanonicalMarkdownFile([halfOnly], calculateDynamicNotional(10000))).markets[0];
   assert.equal(halfQuote.loss_market_100pct, null);
+  assert.equal(halfQuote.estimated_prices_100pct, null);
   assert.equal(halfQuote.loss_market_50pct, '-$9.10 (0.050%)');
   const message = formatTopCardsMessage({
     walletsSummary: 'W1', sizing: calculateDynamicNotional(10000), topRows: [halfOnly], mode: 'open',
@@ -303,6 +309,7 @@ test('generateCanonicalJsonFile produces valid structured JSON with boosts, stoc
   assert.match(message, /100% .*недостаточно глубины/);
   assert.match(message, /50% .*-\$9\.10 \(0\.050%\)/);
   assert.ok(message.indexOf('50% — половина') < message.indexOf('OI RH'));
+  assert.match(message, /15:52:32 UTC/);
 
 });
 

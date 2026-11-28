@@ -107,9 +107,9 @@ export function calculateEntryFriction(params: EntryFrictionParams): { frictionU
 
   // Трение (потеря на спреде): если купили дороже, чем продали, friction > 0 (расход)
   // Если продали дороже, чем купили, friction <= 0 (премия в пользу трейдера)
-  const frictionUsd = parseFloat(((buyPrice - sellPrice) * size).toFixed(2));
-  const frictionPct = notional > 0 ? parseFloat(((frictionUsd / notional) * 100).toFixed(3)) : 0;
-  return { frictionUsd, frictionPct };
+  const spread = (buyPrice - sellPrice) * size;
+  const frictionPct = notional > 0 ? Number((spread / notional * 100).toFixed(3)) : 0;
+  return { frictionUsd: Number(spread.toFixed(2)), frictionPct };
 }
 
 export function formatCsvEntryRow(params: {
@@ -316,7 +316,9 @@ export async function activateHedgeOnchain(
     const sell = rh.side === 'short' ? rh : core;
     const matched = Math.min(rh.size, core.size);
     const basis = calculateEntryFriction({ buyPrice: buy.entryPrice, sellPrice: sell.entryPrice, size: matched, notional: sell.entryPrice * matched });
-    const basisText = `$${(-basis.frictionUsd).toFixed(2)} (${(-basis.frictionPct).toFixed(3)}%)`;
+    const basisSource = rh.entryPriceRounded || core.entryPriceRounded
+      ? 'Оценка спреда по округлённым ценам позиции' : 'Спред по стоимости открытых позиций Lighter';
+    const basisText = `${basis.frictionUsd > 0 ? '-' : basis.frictionUsd < 0 ? '+' : ''}$${Math.abs(basis.frictionUsd).toFixed(2)} (${(-basis.frictionPct).toFixed(3)}%)`;
     if (!saveHedgeConfig(hedge)) return '⚠️ Не удалось сохранить конфигурацию мониторинга.';
     const savedConfig = await confirmConfigSave();
     let journal = 'CSV: позиция уже зарегистрирована.';
@@ -326,14 +328,14 @@ export async function activateHedgeOnchain(
         ...getCurrentTradingWeek(new Date(hedge.createdAt)), asset: norm, venue: `Wallet ${slot === 'w1' ? 1 : 2} (${slot.toUpperCase()})`,
         legDescription: `${norm} Hedge`, side: 'Hedge', entryPrice: rh.entryPrice,
         size: matched, margin: legs[0].margin + legs[1].margin, frictionUsd: basis.frictionUsd,
-        notes: `${marker} Базис входа ${basisText}. RH ${rh.side} ${rh.size} @ ${rh.entryPrice} / Core ${core.side} ${core.size} @ ${core.entryPrice}.`,
+        notes: `${marker} ${basisSource} ${basisText}. RH ${rh.side} ${rh.size} @ ${rh.entryPrice} / Core ${core.side} ${core.size} @ ${core.entryPrice}.`,
       }), marker);
       journal = recorded ? 'CSV: вход записан.' : '⚠️ Мониторинг включён. Сохранение CSV в облаке не подтверждено.';
     }
     return [
       `✅ **${norm} ${slot.toUpperCase()}: мониторинг включён**`,
-      ...legs.map((leg) => `• ${leg.name}: ${leg.size} по $${leg.entryPrice}`),
-      `• Спред входа по средним ценам Lighter: **${basisText}** на ${matched} ${norm}, без комиссий и funding.`,
+      ...legs.map((leg) => `• ${leg.name}: ${leg.size} по $${Number(leg.entryPrice.toPrecision(12))}`),
+      `• ${basisSource}: **${basisText}** на ${matched} ${norm}, без комиссий и funding.`,
       ...(rh.size === core.size ? [] : [`⚠️ Незахеджированный остаток: ${Math.abs(rh.size - core.size).toPrecision(8)} ${norm} на ${rh.size > core.size ? 'RH' : 'Core'}.`]),
       journal,
       ...(savedConfig ? [] : ['⚠️ GitHub не подтвердил сохранение состояния. Повторите /o для этого кошелька.']),
