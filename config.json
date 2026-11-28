@@ -457,38 +457,39 @@
       "id": "XRP_W1"
     },
     {
+      "id": "SNDK_W1",
       "symbol": "SNDK",
-      "active": false,
+      "walletSlot": "w1",
+      "active": true,
       "legs": [
         {
-          "id": "rh_sndk_short",
-          "name": "Wallet 1 (W1) (Long)",
+          "id": "rh_sndk_w1_short",
+          "name": "RH W1 (Short)",
           "venue": "lighter",
-          "side": "long",
-          "margin": 7110.2,
-          "entryPrice": 857.54,
-          "leverage": 6.93,
-          "size": 57.44,
-          "liquidationPrice": 780.59,
+          "size": 699,
+          "entryPrice": 85.15,
+          "side": "short",
+          "margin": 8502.84,
+          "leverage": 7,
+          "liquidationPrice": 91.97930349825897,
           "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
         },
         {
-          "id": "core_sndk_long",
-          "name": "Lighter Core (Wallet 1 (W1)) (Short)",
+          "id": "core_sndk_w1_long",
+          "name": "Core W1 (Long)",
           "venue": "lighter",
-          "side": "short",
-          "margin": 7110.2,
-          "entryPrice": 857.62,
-          "leverage": 6.93,
-          "size": 57.44,
-          "liquidationPrice": 952.83,
+          "size": 699,
+          "entryPrice": 85.24,
+          "side": "long",
+          "margin": 8511.82,
+          "leverage": 7,
+          "liquidationPrice": 75.1450387947436,
           "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
         }
       ],
-      "createdAt": 1794349472561,
-      "updatedAt": 1794391310296,
-      "walletSlot": "w1",
-      "id": "SNDK_W1"
+      "createdAt": 1795881243933,
+      "updatedAt": 1795881243933,
+      "entryJournalMarker": "[open:w1:SNDK:1795881243933]"
     },
     {
       "id": "SKHY_W1",
@@ -663,38 +664,38 @@
     }
   ],
   "currentHedge": {
-    "id": "COIN_W2",
-    "symbol": "COIN",
-    "walletSlot": "w2",
+    "id": "SNDK_W1",
+    "symbol": "SNDK",
+    "walletSlot": "w1",
     "active": true,
     "legs": [
       {
-        "id": "rh_coin_w2_short",
-        "name": "RH W2 (Short)",
+        "id": "rh_sndk_w1_short",
+        "name": "RH W1 (Short)",
         "venue": "lighter",
-        "size": 142.5,
-        "entryPrice": 108.24,
+        "size": 699,
+        "entryPrice": 85.15,
         "side": "short",
-        "margin": 2203.46,
+        "margin": 8502.84,
         "leverage": 7,
-        "liquidationPrice": 116.89766723601456,
-        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        "liquidationPrice": 91.97930349825897,
+        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       },
       {
-        "id": "core_coin_w2_long",
-        "name": "Core W2 (Long)",
+        "id": "core_sndk_w1_long",
+        "name": "Core W1 (Long)",
         "venue": "lighter",
-        "size": 142.5,
-        "entryPrice": 108.124,
+        "size": 699,
+        "entryPrice": 85.24,
         "side": "long",
-        "margin": 2201.1,
+        "margin": 8511.82,
         "leverage": 7,
-        "liquidationPrice": 98.34705719298246,
-        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        "liquidationPrice": 75.1450387947436,
+        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
       }
     ],
-    "createdAt": 1795873698187,
-    "updatedAt": 1795873698187,
-    "entryJournalMarker": "[open:w2:COIN:1795873698187]"
+    "createdAt": 1795881243933,
+    "updatedAt": 1795881243933,
+    "entryJournalMarker": "[open:w1:SNDK:1795881243933]"
   }
 }
