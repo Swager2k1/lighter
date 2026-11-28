@@ -625,40 +625,76 @@
       ],
       "createdAt": 1795533302520,
       "updatedAt": 1795617815991
+    },
+    {
+      "id": "COIN_W2",
+      "symbol": "COIN",
+      "walletSlot": "w2",
+      "active": true,
+      "legs": [
+        {
+          "id": "rh_coin_w2_short",
+          "name": "RH W2 (Short)",
+          "venue": "lighter",
+          "size": 142.5,
+          "entryPrice": 108.24,
+          "side": "short",
+          "margin": 2203.46,
+          "leverage": 7,
+          "liquidationPrice": 116.89766723601456,
+          "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        },
+        {
+          "id": "core_coin_w2_long",
+          "name": "Core W2 (Long)",
+          "venue": "lighter",
+          "size": 142.5,
+          "entryPrice": 108.124,
+          "side": "long",
+          "margin": 2201.1,
+          "leverage": 7,
+          "liquidationPrice": 98.34705719298246,
+          "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
+        }
+      ],
+      "createdAt": 1795873698187,
+      "updatedAt": 1795873698187,
+      "entryJournalMarker": "[open:w2:COIN:1795873698187]"
     }
   ],
   "currentHedge": {
-    "id": "SKHY_W1",
-    "symbol": "SKHY",
-    "walletSlot": "w1",
+    "id": "COIN_W2",
+    "symbol": "COIN",
+    "walletSlot": "w2",
     "active": true,
     "legs": [
       {
-        "id": "rh_skhy_w1_short",
-        "name": "Wallet 1 (W1) (Short)",
+        "id": "rh_coin_w2_short",
+        "name": "RH W2 (Short)",
         "venue": "lighter",
+        "size": 142.5,
+        "entryPrice": 108.24,
         "side": "short",
-        "margin": 8579.56,
-        "entryPrice": 117.07,
+        "margin": 2203.46,
         "leverage": 7,
-        "size": 513,
-        "liquidationPrice": 126.44,
-        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        "liquidationPrice": 116.89766723601456,
+        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
       },
       {
-        "id": "core_skhy_w1_long",
-        "name": "Lighter Core (Wallet 1 (W1)) (Long)",
+        "id": "core_coin_w2_long",
+        "name": "Core W2 (Long)",
         "venue": "lighter",
+        "size": 142.5,
+        "entryPrice": 108.124,
         "side": "long",
-        "margin": 8579.56,
-        "entryPrice": 117.21,
+        "margin": 2201.1,
         "leverage": 7,
-        "size": 513,
-        "liquidationPrice": 106.66,
-        "walletAddress": "0xf5FC58036A680707DB6E7df869bb616A6d35aF7f"
+        "liquidationPrice": 98.34705719298246,
+        "walletAddress": "0x1F1414F64161287f2eb849b09083A50C6C513Ff2"
       }
     ],
-    "createdAt": 1795789403684,
-    "updatedAt": 1795789403684
+    "createdAt": 1795873698187,
+    "updatedAt": 1795873698187,
+    "entryJournalMarker": "[open:w2:COIN:1795873698187]"
   }
 }
