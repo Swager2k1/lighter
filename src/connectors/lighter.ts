@@ -17,6 +17,7 @@ export interface LighterPosition {
   size: number;
   pnl: number;
   marketIndex: number;
+  sizeDecimals?: number;
   liquidationPrice?: number;
   positionValue?: number;
   allocatedMargin?: number;
@@ -28,20 +29,19 @@ const LIGHTER_BASE_URL = 'https://api.rh.lighter.xyz';
 const LIGHTER_ARB_BASE_URL = 'https://mainnet.zklighter.elliot.ai';
 
 // Кеш соответствия symbol -> marketId
-let marketCache: Map<string, number> = new Map();
-let cacheTimestamp = 0;
+const marketCaches = new Map<LighterVenue, { markets: Map<string, number>; timestamp: number }>();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 минут
 
-export async function getLighterMarketId(symbol: string): Promise<number | null> {
+export async function getLighterMarketId(symbol: string, venue: LighterVenue = 'rh'): Promise<number | null> {
   const normSymbol = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '');
   const now = Date.now();
 
-  if (marketCache.size > 0 && now - cacheTimestamp < CACHE_TTL_MS) {
-    return marketCache.get(normSymbol) ?? null;
-  }
+  const cached = marketCaches.get(venue);
+  if (cached && now - cached.timestamp < CACHE_TTL_MS) return cached.markets.get(normSymbol) ?? null;
+  const base = venue === 'rh' ? LIGHTER_BASE_URL : LIGHTER_ARB_BASE_URL;
 
   try {
-    const res = await fetch(`${LIGHTER_BASE_URL}/api/v1/orderBooks`, {
+    const res = await fetch(`${base}/api/v1/orderBooks`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       signal: AbortSignal.timeout(6000),
     });
@@ -57,23 +57,23 @@ export async function getLighterMarketId(symbol: string): Promise<number | null>
       newCache.set(ob.symbol.toUpperCase(), ob.market_id);
     }
 
-    marketCache = newCache;
-    cacheTimestamp = now;
-    return marketCache.get(normSymbol) ?? null;
+    marketCaches.set(venue, { markets: newCache, timestamp: now });
+    return newCache.get(normSymbol) ?? null;
   } catch (err) {
     console.error(`[Lighter] Ошибка загрузки списка рынков:`, err);
-    return marketCache.get(normSymbol) ?? null;
+    return cached?.markets.get(normSymbol) ?? null;
   }
 }
 
-export async function fetchLighterTicker(symbol: string): Promise<LighterMarketData | null> {
-  const marketId = await getLighterMarketId(symbol);
+export async function fetchLighterTicker(symbol: string, venue: LighterVenue = 'rh'): Promise<LighterMarketData | null> {
+  const marketId = await getLighterMarketId(symbol, venue);
+  const base = venue === 'rh' ? LIGHTER_BASE_URL : LIGHTER_ARB_BASE_URL;
   if (marketId === null) {
     return null;
   }
 
   try {
-    const res = await fetch(`${LIGHTER_BASE_URL}/api/v1/orderBookDetails?market_id=${marketId}`, {
+    const res = await fetch(`${base}/api/v1/orderBookDetails?market_id=${marketId}`, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       signal: AbortSignal.timeout(6000),
     });
@@ -123,78 +123,81 @@ export async function fetchLighterTicker(symbol: string): Promise<LighterMarketD
   }
 }
 
-/**
- * Запрос открытых ончейн-позиций аккаунта через официальный API Lighter (Robinhood или Arbitrum Core)
- */
-export async function fetchLighterPositions(
-  accountOrAddress: string,
-  venue: 'rh' | 'arb' = 'rh'
-): Promise<LighterPosition[]> {
-  if (!accountOrAddress || accountOrAddress.trim() === '') {
-    return [];
+export type LighterVenue = 'rh' | 'arb';
+
+export async function lighterGet<T>(venue: LighterVenue, endpoint: string, params: URLSearchParams): Promise<T> {
+  const base = venue === 'arb' ? LIGHTER_ARB_BASE_URL : LIGHTER_BASE_URL;
+  const response = await fetch(`${base}/api/v1/${endpoint}?${params}`, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) throw new Error(`Lighter ${venue}: HTTP ${response.status}`);
+  const data = await response.json() as T & { code?: number };
+  if (data.code !== undefined && data.code !== 200) throw new Error(`Lighter ${venue}: code ${data.code}`);
+  return data;
+}
+
+interface AccountPosition {
+  market_id: number;
+  symbol: string;
+  sign: number;
+  position: string;
+  avg_entry_price: string;
+  position_value: string;
+  unrealized_pnl: string;
+  liquidation_price: string;
+  allocated_margin?: string;
+  initial_margin_fraction?: string;
+}
+
+export async function readLighterAccount(address: string, venue: LighterVenue) {
+  if (!address.trim()) throw new Error('Lighter wallet is not configured');
+  const { accounts } = await lighterGet<{ accounts: {
+    account_index?: number;
+    index?: number;
+    collateral?: string;
+    total_asset_value?: string;
+    available_balance?: string;
+    positions?: AccountPosition[];
+  }[] }>(venue, 'account', new URLSearchParams({ by: 'l1_address', value: address.trim() }));
+  if (!Array.isArray(accounts) || accounts.length !== 1 || !Array.isArray(accounts[0]?.positions)) {
+    throw new Error(`Lighter ${venue}: cannot identify a single account with positions`);
   }
-
-  const baseUrl = venue === 'arb' ? LIGHTER_ARB_BASE_URL : LIGHTER_BASE_URL;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/v1/account?by=l1_address&value=${accountOrAddress.trim()}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        Accept: 'application/json',
-      },
-      signal: AbortSignal.timeout(8000),
+  const account = accounts[0];
+  const index = account.account_index ?? account.index;
+  const markets = new Map<string, number>();
+  const positions: LighterPosition[] = [];
+  for (const raw of account.positions!) {
+    const symbol = raw.symbol.toUpperCase();
+    const size = Math.abs(Number(raw.position));
+    if (!Number.isFinite(size)) throw new Error('Invalid Lighter position quantity');
+    markets.set(symbol, raw.market_id);
+    if (!size) continue;
+    const entryPrice = Number(raw.avg_entry_price);
+    if (!(entryPrice > 0) || (raw.sign !== -1 && raw.sign !== 1)) throw new Error('Invalid Lighter open position');
+    positions.push({
+      symbol, size, entryPrice, sizeDecimals: raw.position.split('.')[1]?.length ?? 0,
+      side: raw.sign === -1 ? 'short' : 'long',
+      pnl: Number(raw.unrealized_pnl) || 0, marketIndex: raw.market_id,
+      liquidationPrice: Number(raw.liquidation_price) || 0,
+      positionValue: Number(raw.position_value) || 0,
+      allocatedMargin: Number(raw.allocated_margin) || 0,
+      accountCollateral: Number(account.collateral) || 0,
+      initialMarginFraction: Number(raw.initial_margin_fraction) || 0,
     });
+  }
+  return {
+    index, positions, markets,
+    equity: Number(account.total_asset_value ?? account.collateral),
+    available: Number(account.available_balance),
+  };
+}
 
-    if (!res.ok) {
-      return [];
-    }
-
-    const data = (await res.json()) as {
-      accounts?: Array<{
-        collateral?: string;
-        positions?: Array<{
-          market_id: number;
-          symbol: string;
-          sign: number;
-          position: string;
-          avg_entry_price: string;
-          position_value: string;
-          unrealized_pnl: string;
-          liquidation_price: string;
-          allocated_margin?: string;
-          initial_margin_fraction?: string;
-        }>;
-      }>;
-    };
-
-    const rawPositions = data.accounts?.[0]?.positions;
-    const accountCollateral = parseFloat(data.accounts?.[0]?.collateral || '0') || 0;
-    if (!Array.isArray(rawPositions)) return [];
-
-    const result: LighterPosition[] = [];
-    for (const pos of rawPositions) {
-      const size = parseFloat(pos.position) || 0;
-      if (size <= 0) continue; // Пропускаем нулевые/закрытые записи
-
-      result.push({
-        symbol: pos.symbol.toUpperCase(),
-        side: pos.sign === -1 ? 'short' : 'long',
-        entryPrice: parseFloat(pos.avg_entry_price) || 0,
-        size,
-        pnl: parseFloat(pos.unrealized_pnl) || 0,
-        marketIndex: pos.market_id,
-        liquidationPrice: parseFloat(pos.liquidation_price) || 0,
-        positionValue: parseFloat(pos.position_value) || 0,
-        allocatedMargin: parseFloat(pos.allocated_margin || '0') || 0,
-        accountCollateral,
-        initialMarginFraction: parseFloat(pos.initial_margin_fraction || '0') || 0,
-      });
-    }
-
-    return result;
-  } catch (err) {
-    console.error(`[Lighter ${venue.toUpperCase()}] Ошибка чтения позиций для ${accountOrAddress}:`, err);
+export async function fetchLighterPositions(address: string, venue: LighterVenue = 'rh'): Promise<LighterPosition[]> {
+  if (!address.trim()) return [];
+  try {
+    return (await readLighterAccount(address, venue)).positions;
+  } catch {
     return [];
   }
 }
-

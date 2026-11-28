@@ -103,9 +103,10 @@ test('parseCloseCommandArgs correctly parses symbol and optional exit price', as
   assert.equal(c2.exitPrice, 640.10);
 });
 
-test('getCurrentTradingWeek returns Week 10 and 13.11 - 20.11', async () => {
+test('getCurrentTradingWeek rolls over on Friday UTC', async () => {
   const { getCurrentTradingWeek } = await import('../src/services/positionSyncService.js');
-  const weekInfo = getCurrentTradingWeek();
+  const weekInfo = getCurrentTradingWeek(new Date('2026-11-19T23:59:59Z'));
+  assert.deepEqual(getCurrentTradingWeek(new Date('2026-11-20T00:00:00Z')), { week: 'Week 11', period: '20.11 - 27.11' });
   assert.equal(weekInfo.week, 'Week 10');
   assert.equal(weekInfo.period, '13.11 - 20.11');
 });
@@ -170,4 +171,94 @@ test('formatCsvExitRow formats note correctly with realistic duration and prices
 
 
 
+
+
+test('reconstructs a closed short including partial liquidation, using separate execution prices', async () => {
+  const { reconstructClosedCycle } = await import('../src/services/lighterExecutions.js');
+  const opening = { trade_id: 1, timestamp: 1000, size: '10', price: '100', usd_amount: '1000', ask_account_id: 1, bid_account_id: 2, is_maker_ask: false, taker_position_size_before: '0' };
+  const liquidation = { trade_id: 2, timestamp: 2000, size: '4', price: '118', usd_amount: '472', ask_account_id: 2, bid_account_id: 1, is_maker_ask: true, taker_position_size_before: '-10', type: 'liquidation', taker_fee: 10000 };
+  const closing = { ...liquidation, trade_id: 3, timestamp: 3000, size: '6', price: '112', usd_amount: '672', taker_position_size_before: '-6', type: 'trade', taker_fee: 0 };
+  const cycle = reconstructClosedCycle([closing, opening, liquidation], 1, 'short', 1500);
+  assert.equal(cycle?.entryPrice, 100);
+  assert.equal(cycle?.exitPrice, 114.4);
+  assert.equal(cycle?.pricePnl, -144);
+  assert.equal(cycle?.fees, 4.72);
+  assert.equal(cycle?.liquidatedSize, 4);
+  assert.equal(reconstructClosedCycle([closing, liquidation], 1, 'short', 1500), null);
+  assert.equal(reconstructClosedCycle([opening, liquidation], 1, 'short', 1500), null);
+  assert.equal(reconstructClosedCycle([opening, liquidation, closing], 1, 'long', 1500), null);
+});
+
+test('record close keeps both positions active until verified fills and durable CSV, then logs once', async (t) => {
+  const { default: fs } = await import('node:fs');
+  const { deactivateHedgeOnchain } = await import('../src/services/positionSyncService.js');
+  const { githubSyncService } = await import('../src/services/githubSyncService.js');
+  const { loadConfig } = await import('../src/config.js');
+  const wallet = '0xW1';
+  const closed = Date.UTC(2026, 10, 27, 14, 25);
+  const opened = closed - 60_000;
+  const hedge = {
+    id: 'SKHY_W1', symbol: 'SKHY', walletSlot: 'w1', active: true,
+    createdAt: opened + 1000, updatedAt: opened + 1000,
+    legs: [
+      { id: 'rh_skhy_w1_short', name: 'RH', venue: 'lighter', side: 'short', size: 10, entryPrice: 100, margin: 142, walletAddress: wallet },
+      { id: 'core_skhy_w1_long', name: 'Core', venue: 'lighter', side: 'long', size: 10, entryPrice: 101, margin: 144, walletAddress: wallet },
+    ],
+  };
+  const files = new Map(Object.entries({
+    'config.json': JSON.stringify({ wallets: { robinhoodWallet1: wallet }, hedges: [hedge], currentHedge: hedge }),
+    'pnl_and_points_analysis.csv': 'Week,Period,Asset,Venue',
+  }));
+  const name = (file: unknown) => String(file).split(/[\\/]/).at(-1)!;
+  const originalRead = fs.readFileSync;
+  t.mock.method(fs, 'readFileSync', (file: string, options: BufferEncoding) => files.get(name(file)) ?? originalRead(file, options));
+  t.mock.method(fs, 'writeFileSync', (file: string, data: string) => { files.set(name(file), data); });
+  t.mock.method(fs, 'renameSync', (from: string, to: string) => { files.set(name(to), files.get(name(from))!); });
+  t.mock.method(fs, 'appendFileSync', (file: string, data: string) => { files.set(name(file), files.get(name(file)) + data); });
+  t.mock.method(githubSyncService, 'syncConfigFile', async () => ({ success: true }));
+
+  let api = 'error';
+  let saveCsv = false;
+  t.mock.method(githubSyncService, 'syncCsvFile', async () => ({ success: saveCsv }));
+  t.mock.method(globalThis, 'fetch', async (input: string) => {
+    const rh = input.includes('api.rh.lighter');
+    const account = rh ? 22503 : 746192;
+    if (input.includes('/account?')) {
+      if (api === 'error' && !rh) return Response.json({}, { status: 503 });
+      return Response.json({ accounts: [{
+        account_index: account,
+        positions: [{ symbol: 'SKHY', market_id: 0, position: api === 'partial' && !rh ? '2.0' : '0', sign: rh ? -1 : 1, avg_entry_price: rh ? '100' : '101' }],
+      }] });
+    }
+    assert.match(input, /\/trades\?/);
+    const fill = (entry: boolean) => {
+      const sell = entry === rh;
+      return {
+        trade_id: entry ? 1 : 2, market_id: 0, timestamp: entry ? opened : closed, size: '10',
+        usd_amount: String((rh ? (entry ? 100 : 120) : (entry ? 101 : 114)) * 10),
+        ask_account_id: sell ? account : 1, bid_account_id: sell ? 1 : account,
+        is_maker_ask: !sell, taker_position_size_before: entry ? '0' : rh ? '-10' : '10',
+      };
+    };
+    return Response.json({ trades: [fill(false), fill(true)] });
+  });
+
+  assert.match(await deactivateHedgeOnchain('SKHY', 'w1'), /Мониторинг сохранён|мониторинг сохранён/);
+  assert.equal(loadConfig().hedges?.[0].active, true);
+  api = 'partial';
+  assert.match(await deactivateHedgeOnchain('SKHY', 'w1'), /ещё открыт на Core/);
+  assert.equal(loadConfig().hedges?.[0].active, true);
+  api = 'closed';
+  assert.match(await deactivateHedgeOnchain('SKHY', 'w1', undefined, opened), /другой позиции/);
+  assert.match(await deactivateHedgeOnchain('SKHY', 'w1'), /сохранение CSV не подтверждено/);
+  assert.equal(loadConfig().hedges?.[0].active, true);
+  saveCsv = true;
+  const reply = await deactivateHedgeOnchain('SKHY', 'w1');
+  assert.match(reply, /PnL по ценам \*\*\$-70.00/);
+  assert.equal(loadConfig().hedges?.[0].active, false);
+  assert.match(await deactivateHedgeOnchain('SKHY', 'w1'), /не найдена/);
+  const journal = files.get('pnl_and_points_analysis.csv')!;
+  assert.equal(journal.match(/\[fills:w1:2:2\]/g)?.length, 1);
+  assert.match(journal, /,-70,-,0,-,-,/);
+});
 

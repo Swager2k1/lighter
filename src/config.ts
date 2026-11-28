@@ -8,12 +8,37 @@ dotenv.config();
 
 const CONFIG_PATH = path.resolve(process.cwd(), 'config.json');
 
-function writeConfigAndSync(toSave: any, message: string): void {
+export async function restoreCloudRuntimeState(): Promise<void> {
+  if (process.env.RENDER !== 'true') return;
+  if (!githubSyncService.isConfigured()) throw new Error('Render requires GITHUB_PAT for runtime state');
+  const { config, journal } = await githubSyncService.readRuntimeFiles();
+  const parsed = JSON.parse(config) as Partial<FullConfig>;
+  if (!parsed.wallets || !parsed.thresholds || (!Array.isArray(parsed.hedges) && !parsed.currentHedge) ||
+      !journal.startsWith('Week,Period,Asset,')) throw new Error('Invalid GitHub runtime state');
+  writeStateFile(CONFIG_PATH, config);
+  writeStateFile(path.resolve(process.cwd(), 'pnl_and_points_analysis.csv'), journal);
+}
+
+function writeStateFile(file: string, content: string): void {
+  const sidecar = `${file}.tmp`;
+  fs.writeFileSync(sidecar, content, 'utf8');
+  fs.renameSync(sidecar, file);
+}
+
+let pendingConfigSave = Promise.resolve(true);
+
+export function confirmConfigSave(): Promise<boolean> {
+  return pendingConfigSave;
+}
+
+function writeConfigAndSync(toSave: Omit<FullConfig, 'telegram'>, message: string): void {
   const jsonStr = JSON.stringify(toSave, null, 2);
-  fs.writeFileSync(CONFIG_PATH, jsonStr, 'utf-8');
-  githubSyncService.syncConfigFile(jsonStr, `${message} [skip ci]`).catch((syncErr) => {
-    console.warn('[Config] Предупреждение облачной синхронизации config.json:', syncErr?.message || syncErr);
-  });
+  writeStateFile(CONFIG_PATH, jsonStr);
+  pendingConfigSave = githubSyncService.syncConfigFile(jsonStr, message).then((result) => {
+    if (result.success || result.reason === 'missing_token') return true;
+    console.warn('[Config] GitHub не подтвердил сохранение состояния');
+    return false;
+  }).catch(() => false);
 }
 
 export interface FullConfig extends AppConfig {
@@ -114,7 +139,7 @@ export function getHedgeKey(hedge: { id?: string; symbol: string; walletSlot?: '
   return normSym;
 }
 
-export function saveHedgeConfig(hedge: ThreeLegHedge): void {
+export function saveHedgeConfig(hedge: ThreeLegHedge): boolean {
   try {
     const current = loadConfig();
     const existingHedges = current.hedges ? [...current.hedges] : (current.currentHedge ? [{ ...current.currentHedge }] : []);
@@ -140,8 +165,10 @@ export function saveHedgeConfig(hedge: ThreeLegHedge): void {
       currentHedge: hedge,
     };
     writeConfigAndSync(toSave, `sync: save hedge ${hedge.id || hedge.symbol}`);
+    return true;
   } catch (err) {
     console.error('Ошибка сохранения config.json:', err);
+    return false;
   }
 }
 

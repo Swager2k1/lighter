@@ -22,6 +22,7 @@ export interface ThreeLegHedge {
   legs: LegConfig[];
   createdAt: number;
   updatedAt: number;
+  entryJournalMarker?: string;
 }
 
 export interface MarketInfo {

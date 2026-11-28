@@ -1,19 +1,28 @@
-import { loadConfig, getActiveHedges } from './config.js';
+import { loadConfig, getActiveHedges, restoreCloudRuntimeState } from './config.js';
 import { getMarketInfo } from './services/marketScanner.js';
 import { evaluateHedgeRisk } from './services/riskEngine.js';
 import { globalSpikeDetector } from './services/spikeDetector.js';
 import { TelegramBotService } from './bot/telegram.js';
 import { CriticalAlertBotService } from './bot/criticalBot.js';
 import { handleStatusCommand } from './bot/handlers.js';
+import { readMonitoredWallets, reconcileHedgesFromOnchain, refreshMonitoredHedge } from './services/positionSyncService.js';
+import { fetchLighterTicker } from './connectors/lighter.js';
+import { githubSyncService } from './services/githubSyncService.js';
 import { startHealthServer, stopHealthServer } from './services/healthServer.js';
 let isRunning = true;
 let healthServerInstance = null;
+let stopTelegramPolling;
 async function main() {
     console.log('═══════════════════════════════════════════════════════════════');
     console.log('   🚀 LIGHTER-POLY DELTA-NEUTRAL RISK & HEDGE MONITOR');
     console.log('   🛡  100% Anti-Sybil / Zero-Exposure Anonymous Polling');
     console.log('   🚨 Двойной бот: Обычный (инфо) + Критический (сирена)');
     console.log('═══════════════════════════════════════════════════════════════\n');
+    await restoreCloudRuntimeState();
+    if (process.env.RENDER === 'true' && process.env.DISABLE_POLLING !== 'true') {
+        const sync = await reconcileHedgesFromOnchain(false);
+        console.log(sync);
+    }
     const config = loadConfig();
     const initialHedges = getActiveHedges(config);
     const symbolsList = initialHedges.length > 0 ? initialHedges.map((h) => h.symbol).join(', ') : 'нет (все связки закрыты)';
@@ -26,6 +35,7 @@ async function main() {
     const bot = new TelegramBotService(config.telegram.botToken, config.telegram.chatId);
     // 2. Второй бот (только критические алерты: <= 2.5%, шаг 0.25%, сирена <= 1.5%)
     const criticalBot = new CriticalAlertBotService(config.telegram.criticalBotToken, config.telegram.chatId);
+    stopTelegramPolling = () => { bot.stopPolling(); criticalBot.stopPolling(); };
     const disablePolling = process.env.DISABLE_POLLING === 'true';
     if (disablePolling) {
         console.log('⚠️ Telegram Polling отключен флагом DISABLE_POLLING=true (режим отладки/локальный).');
@@ -64,7 +74,11 @@ async function main() {
                 }
             }
             else {
-                for (const hedge of activeHedges) {
+                const wallets = await readMonitoredWallets(currentConfig);
+                for (const tracked of activeHedges) {
+                    const hedge = refreshMonitoredHedge(currentConfig, tracked, wallets);
+                    if (!hedge.legs.length)
+                        continue;
                     // 1. Анонимный опрос публичных цен
                     const market = await getMarketInfo(hedge.symbol);
                     if (market && market.lighterMarkPrice > 0) {
@@ -74,9 +88,12 @@ async function main() {
                             console.warn(`[СКВИЗ] Обнаружен скачок цены ${spike.symbol}: ${spike.changePct}% за ${spike.windowMinutes}м`);
                             await bot.dispatchSpikeAlert(spike);
                         }
+                        const core = hedge.legs.some((leg) => leg.id.startsWith('core_'))
+                            ? await fetchLighterTicker(hedge.symbol, 'arb') : null;
                         // 3. Оценка риска связки
                         const summary = evaluateHedgeRisk(hedge, {
                             lighterPrice: market.lighterMarkPrice,
+                            corePrice: core?.markPrice,
                             polymarketPrice: market.polymarketMarkPrice,
                         }, thresholds.warningBufferPct, thresholds.criticalBufferPct);
                         // 4. Диспетчеризация алертов
@@ -113,22 +130,19 @@ async function main() {
     }
     console.log('🛑 Сервис остановлен.');
 }
-process.on('SIGINT', async () => {
-    console.log('\nПолучен сигнал завершения (SIGINT)...');
+async function shutdown() {
+    if (!isRunning)
+        return;
     isRunning = false;
-    if (healthServerInstance) {
+    stopTelegramPolling?.();
+    if (healthServerInstance)
         await stopHealthServer(healthServerInstance);
-    }
+    await githubSyncService.waitForWrites();
     process.exit(0);
-});
-process.on('SIGTERM', async () => {
-    console.log('\nПолучен сигнал завершения (SIGTERM)...');
-    isRunning = false;
-    if (healthServerInstance) {
-        await stopHealthServer(healthServerInstance);
-    }
-    process.exit(0);
-});
+}
+process.on('SIGINT', () => void shutdown());
+process.on('SIGTERM', () => void shutdown());
 main().catch((err) => {
     console.error('Критическая ошибка запуска:', err);
+    process.exitCode = 1;
 });

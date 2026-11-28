@@ -77,12 +77,13 @@ export function evaluateLegRisk(
 
 export function evaluateHedgeRisk(
   hedge: ThreeLegHedge,
-  prices: { lighterPrice: number; polymarketPrice: number },
+  prices: { lighterPrice: number; corePrice?: number; polymarketPrice: number },
   warningThresholdPct = 5.0,
   criticalThresholdPct = 2.5
 ): HedgeSummary {
   const assessments: RiskAssessment[] = hedge.legs.map((leg) => {
-    const curPrice = leg.venue === 'lighter' ? prices.lighterPrice : prices.polymarketPrice;
+    const curPrice = leg.venue === 'polymarket' ? prices.polymarketPrice :
+      leg.id.startsWith('core_') && prices.corePrice ? prices.corePrice : prices.lighterPrice;
     return evaluateLegRisk(leg, curPrice, warningThresholdPct, criticalThresholdPct);
   });
 

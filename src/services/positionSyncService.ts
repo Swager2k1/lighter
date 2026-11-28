@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadConfig, saveHedgeConfig, deactivateHedge, findHedge, getHedgeKey } from '../config.js';
-import { fetchLighterPositions, fetchLighterTicker } from '../connectors/lighter.js';
+import { loadConfig, saveHedgeConfig, deactivateHedge, findHedge, getActiveHedges, confirmConfigSave, type FullConfig } from '../config.js';
+import { readLighterAccount } from '../connectors/lighter.js';
+import { estimateCycleFunding, readClosedCycle } from './lighterExecutions.js';
 import { githubSyncService } from './githubSyncService.js';
 import { ThreeLegHedge } from '../types.js';
 
@@ -14,12 +15,33 @@ export interface EntryFrictionParams {
   notional: number;
 }
 
-export function getCurrentTradingWeek(): { week: string; period: string } {
-  // Текущая неделя цикла в проекте — Week 10 (13.11 - 20.11)
-  return {
-    week: 'Week 10',
-    period: '13.11 - 20.11',
-  };
+export function getCurrentTradingWeek(at = new Date()): { week: string; period: string } {
+  const weekMs = 7 * 86_400_000;
+  const anchor = Date.UTC(2026, 10, 13);
+  const offset = Math.floor((at.getTime() - anchor) / weekMs);
+  const format = (time: number) => new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'UTC', day: '2-digit', month: '2-digit',
+  }).format(time);
+  const start = anchor + offset * weekMs;
+  return { week: `Week ${10 + offset}`, period: `${format(start)} - ${format(start + weekMs)}` };
+}
+
+type Slot = 'w1' | 'w2';
+
+function walletAddress(config: FullConfig, slot: Slot) {
+  return (slot === 'w1' ? config.wallets.robinhoodWallet1 : config.wallets.robinhoodWallet2)?.trim();
+}
+
+export function getHedgeWallet(config: FullConfig, hedge: ThreeLegHedge): { slot: Slot; address: string } | null {
+  const addresses = new Set(hedge.legs.map((leg) => leg.walletAddress?.trim().toLowerCase()).filter(Boolean));
+  const slot = hedge.walletSlot ?? (['w1', 'w2'] as const).find((candidate) => {
+    const address = walletAddress(config, candidate);
+    return address && addresses.has(address.toLowerCase());
+  });
+  if (!slot) return null;
+  const address = walletAddress(config, slot);
+  if (!address || addresses.size > 1 || (addresses.size === 1 && !addresses.has(address.toLowerCase()))) return null;
+  return { slot, address };
 }
 
 export interface MarginLeverageParams {
@@ -108,8 +130,8 @@ export function formatCsvEntryRow(params: {
   const balanceChangeStr = params.frictionUsd <= 0
     ? `+${Math.abs(params.frictionUsd)}`
     : `-${params.frictionUsd}`;
-  const noteStr = params.notes || `Opened via /o ${params.asset} (Friction: ${balanceChangeStr})`;
-  return `${params.week},${params.period},${params.asset},${params.venue},${params.legDescription},${params.side},${params.entryPrice},-,${params.size},${params.margin},${params.margin},-,0,${balanceChangeStr},0,-,-,"${noteStr}"`;
+  const noteStr = (params.notes || `Opened via /o ${params.asset} (Entry basis: ${balanceChangeStr})`).replaceAll('"', '""');
+  return `${params.week},${params.period},${params.asset},${params.venue},${params.legDescription},${params.side},${params.entryPrice},-,${params.size},${params.margin},${params.margin},-,-,-,0,-,-,"${noteStr}"`;
 }
 
 export function formatCsvExitRow(params: {
@@ -124,31 +146,24 @@ export function formatCsvExitRow(params: {
   size: number;
   margin: number;
   netPnl: number;
-  netBalanceChange: number;
+  netBalanceChange: number | null;
   notes?: string;
 }): string {
-  const noteStr = params.notes || `Closed via /c ${params.asset}`;
-  return `${params.week},${params.period},${params.asset},${params.venue},${params.legDescription},${params.side},${params.entryPrice},${params.exitPrice},${params.size},${params.margin},${params.margin},-,${params.netPnl > 0 ? '+' : ''}${params.netPnl},${params.netBalanceChange > 0 ? '+' : ''}${params.netBalanceChange},0,-,-,"${noteStr}"`;
+  const noteStr = (params.notes || `Closed via /c ${params.asset}`).replaceAll('"', '""');
+  const balance = params.netBalanceChange === null ? '-' : String(params.netBalanceChange);
+  return `${params.week},${params.period},${params.asset},${params.venue},${params.legDescription},${params.side},${params.entryPrice},${params.exitPrice},${params.size},${params.margin},${params.margin},-,${params.netPnl > 0 ? '+' : ''}${params.netPnl},${balance},0,-,-,"${noteStr}"`;
 }
 
-export function appendRowToCsv(csvRow: string): void {
+export function appendRowToCsv(csvRow: string, marker?: string): Promise<boolean> {
   const csvPath = path.resolve(process.cwd(), 'pnl_and_points_analysis.csv');
   try {
-    fs.appendFileSync(csvPath, `\n${csvRow}`);
+    const content = fs.readFileSync(csvPath, 'utf8');
+    if (!marker || !content.includes(marker)) fs.appendFileSync(csvPath, `\n${csvRow}`);
+    const sync = githubSyncService.syncCsvFile(fs.readFileSync(csvPath, 'utf8'), 'sync: log trade row [skip ci]');
+    return sync.then((result) => result.success || result.reason === 'missing_token').catch(() => false);
   } catch (err) {
-    console.error('[PositionSync] Ошибка записи в pnl_and_points_analysis.csv:', err);
-  }
-
-  // Облачная синхронизация с репозиторием GitHub при наличии токена
-  try {
-    if (fs.existsSync(csvPath)) {
-      const fullContent = fs.readFileSync(csvPath, 'utf-8');
-      githubSyncService.syncCsvFile(fullContent, `sync: log trade row [skip ci]`).catch((syncErr) => {
-        console.warn('[PositionSync] Предупреждение облачной синхронизации CSV:', syncErr?.message || syncErr);
-      });
-    }
-  } catch (syncReadErr) {
-    console.error('[PositionSync] Ошибка чтения CSV для облачной синхронизации:', syncReadErr);
+    console.error('[PositionSync] Ошибка записи CSV:', err);
+    return Promise.resolve(false);
   }
 }
 
@@ -219,428 +234,208 @@ export function parseCloseCommandArgs(args: string[]): {
   return { symbol, targetWallet, exitPrice };
 }
 
-export async function activateHedgeOnchain(
-  symbol: string,
-  targetWallet?: 'w1' | 'w2',
-  manualSize?: number,
-  manualPrice?: number,
-  manualLeverage?: number,
-  options?: { skipCsv?: boolean }
-): Promise<string> {
-  const config = loadConfig();
-  const normSym = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '');
-  const w1 = config.wallets.robinhoodWallet1?.trim();
-  const w2 = config.wallets.robinhoodWallet2?.trim();
-
-  // 1. Определение целевого кошелька:
-  let selectedWallet: 'w1' | 'w2' = targetWallet || 'w1';
-  let targetAddr = selectedWallet === 'w2' ? (w2 || w1) : (w1 || w2);
-  let targetName = selectedWallet === 'w2' ? 'Wallet 2 (W2)' : 'Wallet 1 (W1)';
-
-  let rhPositions: Awaited<ReturnType<typeof fetchLighterPositions>> = [];
-  let arbPositions: Awaited<ReturnType<typeof fetchLighterPositions>> = [];
-
-  if (targetWallet) {
-    [rhPositions, arbPositions] = await Promise.all([
-      fetchLighterPositions(targetAddr || '', 'rh'),
-      fetchLighterPositions(targetAddr || '', 'arb'),
-    ]);
-  } else {
-    // Автодетект кошелька: проверяем W1
-    const [w1Rh, w1Arb] = await Promise.all([
-      w1 ? fetchLighterPositions(w1, 'rh') : Promise.resolve([]),
-      w1 ? fetchLighterPositions(w1, 'arb') : Promise.resolve([]),
-    ]);
-
-    const hasOnW1 = w1Rh.some((p) => p.symbol === normSym) || w1Arb.some((p) => p.symbol === normSym);
-
-    if (hasOnW1 || !w2) {
-      selectedWallet = 'w1';
-      targetAddr = w1;
-      targetName = 'Wallet 1 (W1)';
-      rhPositions = w1Rh;
-      arbPositions = w1Arb;
-    } else {
-      // Проверяем W2
-      const [w2Rh, w2Arb] = await Promise.all([
-        fetchLighterPositions(w2, 'rh'),
-        fetchLighterPositions(w2, 'arb'),
-      ]);
-      const hasOnW2 = w2Rh.some((p) => p.symbol === normSym) || w2Arb.some((p) => p.symbol === normSym);
-      if (hasOnW2) {
-        selectedWallet = 'w2';
-        targetAddr = w2;
-        targetName = 'Wallet 2 (W2)';
-        rhPositions = w2Rh;
-        arbPositions = w2Arb;
-      } else {
-        selectedWallet = 'w1';
-        targetAddr = w1;
-        targetName = 'Wallet 1 (W1)';
-        rhPositions = w1Rh;
-        arbPositions = w1Arb;
-      }
-    }
-  }
-
-  // 2. Поиск ног позиции на Robinhood и Arbitrum
-  const rhPos = rhPositions.find((p) => p.symbol === normSym);
-  const arbPos = arbPositions.find((p) => p.symbol === normSym);
-  const existingHedge = config.hedges?.find((h) => h.symbol.toUpperCase() === normSym);
-
-  // 3. Вычисление размера (Приоритет: manualSize -> onchain RH -> onchain Arb -> existing -> 10)
-  const size = manualSize || rhPos?.size || arbPos?.size || existingHedge?.legs[0]?.size || 10;
-  const rhSize = manualSize || rhPos?.size || size;
-  const arbSize = manualSize || arbPos?.size || size;
-
-  // 4. Вычисление цен входа
-  const rhEntryPrice =
-    manualPrice || rhPos?.entryPrice || arbPos?.entryPrice || existingHedge?.legs[0]?.entryPrice || 100;
-  const arbEntryPrice =
-    arbPos?.entryPrice ||
-    (manualPrice ? manualPrice * 1.0005 : undefined) ||
-    existingHedge?.legs[1]?.entryPrice ||
-    rhEntryPrice;
-
-  const rhSide: 'long' | 'short' = rhPos?.side || 'short';
-  const arbSide: 'long' | 'short' = arbPos?.side || 'long';
-
-  // 5. Определение маржи и плеча:
-  // Приоритет: manualLeverage -> allocated/IMF/collateral (с защитой от 422x) -> existing -> 7x
-  let leverage: number;
-  let margin: number;
-
-  if (manualLeverage && manualLeverage > 0) {
-    leverage = manualLeverage;
-    margin = Math.round((size * rhEntryPrice) / leverage);
-  } else {
-    const computed = computeMarginAndLeverage({
-      size,
-      entryPrice: rhEntryPrice,
-      allocatedMargin: rhPos?.allocatedMargin || arbPos?.allocatedMargin,
-      initialMarginFraction: rhPos?.initialMarginFraction || arbPos?.initialMarginFraction,
-      accountCollateral: rhPos?.accountCollateral || arbPos?.accountCollateral,
-      fallbackLeverage: existingHedge?.legs[0]?.leverage || 7,
-    });
-    leverage = computed.leverage;
-    margin = computed.margin;
-  }
-
-  // 6. Цены ликвидации (из ончейна Lighter либо расчетные по MMR)
-  const rhLiq =
-    rhPos?.liquidationPrice && rhPos.liquidationPrice > 0
-      ? rhPos.liquidationPrice
-      : parseFloat(
-          (rhEntryPrice * (rhSide === 'short' ? 1 + 1 / leverage - 0.06 : 1 - 1 / leverage + 0.06)).toFixed(2)
-        );
-
-  const arbLiq =
-    arbPos?.liquidationPrice && arbPos.liquidationPrice > 0
-      ? arbPos.liquidationPrice
-      : parseFloat(
-          (arbEntryPrice * (arbSide === 'short' ? 1 + 1 / leverage - 0.06 : 1 - 1 / leverage + 0.06)).toFixed(2)
-        );
-
-  const hedgeId = `${normSym}_${selectedWallet.toUpperCase()}`;
-  const updatedHedge: ThreeLegHedge = {
-    id: hedgeId,
-    symbol: normSym,
-    walletSlot: selectedWallet,
-    active: true,
-    legs: [
-      {
-        id: `rh_${normSym.toLowerCase()}_${selectedWallet}_short`,
-        name: `${targetName} (${rhSide === 'short' ? 'Short' : 'Long'})`,
-        venue: 'lighter',
-        side: rhSide,
-        margin,
-        entryPrice: parseFloat(rhEntryPrice.toFixed(3)),
-        leverage,
-        size: parseFloat(rhSize.toFixed(4)),
-        liquidationPrice: parseFloat(rhLiq.toFixed(2)),
-        walletAddress: targetAddr,
-      },
-      {
-        id: `core_${normSym.toLowerCase()}_${selectedWallet}_long`,
-        name: `Lighter Core (${targetName}) (${arbSide === 'short' ? 'Short' : 'Long'})`,
-        venue: 'lighter',
-        side: arbSide,
-        margin,
-        entryPrice: parseFloat(arbEntryPrice.toFixed(3)),
-        leverage,
-        size: parseFloat(arbSize.toFixed(4)),
-        liquidationPrice: parseFloat(arbLiq.toFixed(2)),
-        walletAddress: targetAddr,
-      },
-    ],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  };
-
-  saveHedgeConfig(updatedHedge);
-
-  // 7. Логирование в CSV
-  const { week, period } = getCurrentTradingWeek();
-
-  // Определяем реальную сторону ног для точного расчета спреда
-  // В новой логике: Core LONG + RH SHORT
-  const longLeg = updatedHedge.legs.find((l) => l.side === 'long') || updatedHedge.legs[1];
-  const shortLeg = updatedHedge.legs.find((l) => l.side === 'short') || updatedHedge.legs[0];
-
-  const entryFriction = calculateEntryFriction({
-    buyPrice: longLeg.entryPrice,
-    sellPrice: shortLeg.entryPrice,
-    size: updatedHedge.legs[0].size,
-    notional: margin * leverage,
-  });
-
-  const nowFormatted = new Date().toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  const frictionNote = entryFriction.frictionUsd <= 0
-    ? `Премия базиса: +$${Math.abs(entryFriction.frictionUsd)}`
-    : `Трение спреда: -$${entryFriction.frictionUsd}`;
-
-  if (!options?.skipCsv) {
-    const csvRow = formatCsvEntryRow({
-      week,
-      period,
-      asset: normSym,
-      venue: targetName,
-      legDescription: `${normSym} Hedge`,
-      side: 'Delta-Neutral',
-      entryPrice: updatedHedge.legs[0].entryPrice,
-      size: updatedHedge.legs[0].size,
-      margin,
-      frictionUsd: entryFriction.frictionUsd,
-      notes: `Opened via /o ${normSym} (${nowFormatted}. ${frictionNote}, Leverage: ${leverage}x)`,
-    });
-    appendRowToCsv(csvRow);
-  }
-
-  const dataSourceNote =
-    rhPos || arbPos
-      ? '🔗 Ончейн Lighter API (live)'
-      : manualSize
-      ? '✍️ Ручной ввод'
-      : '⚙️ Конфигурация / Fallback';
-
-  const frictionDisplay = entryFriction.frictionUsd <= 0
-    ? `+$${Math.abs(entryFriction.frictionUsd)} (+${Math.abs(entryFriction.frictionPct)}%) 🟢 (Премия базиса — продажа дороже покупки)`
-    : `-$${entryFriction.frictionUsd} (-${entryFriction.frictionPct}%) 🔻 (Трение стакана / спред)`;
-
-  return [
-    `✅ **ПОЗИЦИЯ ${normSym} УСПЕШНО АКТИВИРОВАНА!**`,
-    `━━━━━━━━━━━━━━━━━━━━`,
-    `• Источник данных: **${dataSourceNote}**`,
-    `• Период: **${week} (${period})**`,
-    `• Кошелек: **${targetName}** (\`${targetAddr?.slice(0, 6)}...${targetAddr?.slice(-4)}\`)`,
-    `• Нога RH (${rhSide === 'short' ? 'Short' : 'Long'}): **${updatedHedge.legs[0].size} ${normSym}** по **$${updatedHedge.legs[0].entryPrice}** (${leverage}x) [Ликв: **$${updatedHedge.legs[0].liquidationPrice}**]`,
-    `• Нога Arb (${arbSide === 'short' ? 'Short' : 'Long'}): **${updatedHedge.legs[1].size} ${normSym}** по **$${updatedHedge.legs[1].entryPrice}** (${leverage}x) [Ликв: **$${updatedHedge.legs[1].liquidationPrice}**]`,
-    `• Маржа: **$${margin}** | Плечо: **${leverage}x**`,
-    `• Расчётный спред входа: **${frictionDisplay}**`,
-    options?.skipCsv
-      ? `• CSV: без новой строки (reconcile / refresh)`
-      : `• Запись внесена в \`pnl_and_points_analysis.csv\``,
-    `• 🚨 **Мониторинг ликвидаций и сирена: АКТИВИРОВАНЫ**`,
-  ].join('\n');
+const venues = ['rh', 'arb'] as const;
+const venueLabels = ['RH', 'Core'] as const;
+type Accounts = Awaited<ReturnType<typeof readAccounts>>;
+function readAccounts(address: string) {
+  return Promise.all(venues.map((venue) => readLighterAccount(address, venue)));
 }
 
-/**
- * Full onchain reconciliation for W1/W2 on RH + Arb.
- * - Activates/refreshes hedges that exist onchain
- * - Deactivates phantom hedges that are active in config but closed onchain
- */
-export async function reconcileHedgesFromOnchain(): Promise<string> {
+export async function readMonitoredWallets(config: FullConfig) {
+  return new Map(await Promise.all((['w1', 'w2'] as const).map(async (slot) => {
+    const address = walletAddress(config, slot);
+    const accounts = address ? await Promise.allSettled(venues.map((venue) => readLighterAccount(address, venue))) : [];
+    return [slot, accounts] as const;
+  })));
+}
+
+export function refreshMonitoredHedge(config: FullConfig, tracked: ThreeLegHedge, wallets: Awaited<ReturnType<typeof readMonitoredWallets>>) {
+  const wallet = getHedgeWallet(config, tracked);
+  const accounts = wallet ? wallets.get(wallet.slot) : undefined;
+  const hedge = { ...tracked, legs: tracked.legs.flatMap((leg) => {
+    if (leg.venue !== 'lighter') return [leg];
+    const index = leg.id.startsWith('core_') ? 1 : leg.id.startsWith('rh_') ? 0 : -1;
+    const result = accounts?.[index];
+    if (!result || result.status !== 'fulfilled') return [leg];
+    const position = result.value.positions.find((open) => open.symbol === tracked.symbol.toUpperCase());
+    if (!position) return [];
+    return [{ ...leg, side: position.side, size: position.size, entryPrice: position.entryPrice,
+      liquidationPrice: position.liquidationPrice || leg.liquidationPrice }];
+  }) };
+  return hedge;
+}
+
+function livePositions(accounts: Accounts, symbol: string) {
+  return accounts.map((account) => account.positions.find((position) => position.symbol === symbol));
+}
+
+export async function activateHedgeOnchain(
+  symbol: string, targetWallet?: Slot, _manualSize?: number, _manualPrice?: number, _manualLeverage?: number,
+): Promise<string> {
   const config = loadConfig();
-  const w1 = config.wallets.robinhoodWallet1?.trim();
-  const w2 = config.wallets.robinhoodWallet2?.trim();
-
-  if (!w1 && !w2) {
-    return '⚠️ Кошельки не указаны в config.json — reconcile невозможен.';
-  }
-
-  const [w1Rh, w1Arb, w2Rh, w2Arb] = await Promise.all([
-    w1 ? fetchLighterPositions(w1, 'rh') : Promise.resolve([]),
-    w1 ? fetchLighterPositions(w1, 'arb') : Promise.resolve([]),
-    w2 ? fetchLighterPositions(w2, 'rh') : Promise.resolve([]),
-    w2 ? fetchLighterPositions(w2, 'arb') : Promise.resolve([]),
-  ]);
-
-  type Slot = 'w1' | 'w2';
-  const onchainBySlot: Record<Slot, Set<string>> = { w1: new Set(), w2: new Set() };
-
-  for (const p of [...w1Rh, ...w1Arb]) onchainBySlot.w1.add(p.symbol.toUpperCase());
-  for (const p of [...w2Rh, ...w2Arb]) onchainBySlot.w2.add(p.symbol.toUpperCase());
-
-  const lines: string[] = [
-    `🔄 **ONCHAIN RECONCILE**`,
-    `━━━━━━━━━━━━━━━━━━━━`,
-  ];
-
-  const activated: string[] = [];
-  const refreshed: string[] = [];
-  const deactivated: string[] = [];
-
-  // 1. Deactivate phantoms: active in config, absent onchain
-  const active = (config.hedges || []).filter((h) => h.active === true);
-  for (const h of active) {
-    const slot: Slot = h.walletSlot === 'w2' ? 'w2' : 'w1';
-    const sym = h.symbol.toUpperCase();
-    if (!onchainBySlot[slot].has(sym)) {
-      const exitReply = await deactivateHedgeOnchain(sym, slot);
-      deactivated.push(`${sym}_${slot.toUpperCase()}`);
-      lines.push(`🛑 Закрыт фантом: **${sym} ${slot.toUpperCase()}** (нет на ончейне)`);
-      lines.push(exitReply.split('\n').slice(0, 3).join('\n'));
+  const norm = symbol.toUpperCase().replace(/-(USD|PERP)$/, '');
+  const candidates = targetWallet ? [targetWallet] : (['w1', 'w2'] as const).filter((slot) => walletAddress(config, slot));
+  try {
+    const wallets = await Promise.all(candidates.map(async (slot) => {
+      const address = walletAddress(config, slot);
+      if (!address) throw new Error('Wallet missing');
+      const accounts = await readAccounts(address);
+      return { slot, address, positions: livePositions(accounts, norm) };
+    }));
+    const matches = wallets.filter((wallet) => wallet.positions.some(Boolean));
+    if (matches.length !== 1) return matches.length
+      ? `⚠️ ${norm} найден на двух кошельках. Укажите W1 или W2.`
+      : `⚠️ На проверенных кошельках нет открытых позиций ${norm}.`;
+    const { slot, address, positions } = matches[0];
+    const [rh, core] = positions;
+    if (!rh || !core || rh.side === core.side) {
+      return `⚠️ ${norm} ${slot.toUpperCase()}: для записи входа нужны две подтверждённые разнонаправленные ноги. Состояние мониторинга сохранено.`;
     }
-  }
 
-  // 2. Activate / refresh every onchain symbol per wallet
-  for (const slot of ['w1', 'w2'] as Slot[]) {
-    const symbols = onchainBySlot[slot];
-    for (const sym of symbols) {
-      const fresh = loadConfig();
-      const existing = findHedge(fresh, sym, slot);
-      const alreadyActive = existing?.active === true;
-      const reply = await activateHedgeOnchain(sym, slot, undefined, undefined, undefined, {
-        // Skip CSV if already tracked OR if an open row already exists for this week (refresh)
-        skipCsv: alreadyActive,
-      });
-      if (alreadyActive) {
-        refreshed.push(`${sym}_${slot.toUpperCase()}`);
-        lines.push(`♻️ Обновлён: **${sym} ${slot.toUpperCase()}**`);
-      } else {
-        activated.push(`${sym}_${slot.toUpperCase()}`);
-        lines.push(`✅ Активирован с ончейна: **${sym} ${slot.toUpperCase()}**`);
+    const freshConfig = loadConfig();
+    const existing = getActiveHedges(freshConfig).find((hedge) => hedge.symbol.toUpperCase() === norm &&
+      getHedgeWallet(freshConfig, hedge)?.slot === slot) ?? findHedge(freshConfig, norm, slot);
+    const now = Date.now();
+    const legs = [rh, core].map((position, index) => {
+      const { size, entryPrice, side } = position;
+      const { margin, leverage } = computeMarginAndLeverage(position);
+      return {
+        id: `${index === 0 ? 'rh' : 'core'}_${norm.toLowerCase()}_${slot}_${side}`,
+        name: `${venueLabels[index]} ${slot.toUpperCase()} (${side === 'long' ? 'Long' : 'Short'})`,
+        venue: 'lighter' as const, size, entryPrice, side, margin, leverage,
+        liquidationPrice: position.liquidationPrice || undefined,
+        walletAddress: address,
+      };
+    });
+    const hedge: ThreeLegHedge = {
+      id: existing?.id ?? `${norm}_${slot.toUpperCase()}`, symbol: norm, walletSlot: slot, active: true, legs,
+      createdAt: existing?.active ? existing.createdAt : now, updatedAt: now,
+      entryJournalMarker: existing?.active ? existing.entryJournalMarker : `[open:${slot}:${norm}:${now}]`,
+    };
+    const buy = rh.side === 'long' ? rh : core;
+    const sell = rh.side === 'short' ? rh : core;
+    const matched = Math.min(rh.size, core.size);
+    const basis = calculateEntryFriction({ buyPrice: buy.entryPrice, sellPrice: sell.entryPrice, size: matched, notional: sell.entryPrice * matched });
+    const basisText = `$${(-basis.frictionUsd).toFixed(2)} (${(-basis.frictionPct).toFixed(3)}%)`;
+    if (!saveHedgeConfig(hedge)) return '⚠️ Не удалось сохранить конфигурацию мониторинга.';
+    const savedConfig = await confirmConfigSave();
+    let journal = 'CSV: позиция уже зарегистрирована.';
+    if (hedge.entryJournalMarker) {
+      const marker = hedge.entryJournalMarker;
+      const recorded = await appendRowToCsv(formatCsvEntryRow({
+        ...getCurrentTradingWeek(new Date(hedge.createdAt)), asset: norm, venue: `Wallet ${slot === 'w1' ? 1 : 2} (${slot.toUpperCase()})`,
+        legDescription: `${norm} Hedge`, side: 'Hedge', entryPrice: rh.entryPrice,
+        size: matched, margin: legs[0].margin + legs[1].margin, frictionUsd: basis.frictionUsd,
+        notes: `${marker} Базис входа ${basisText}. RH ${rh.side} ${rh.size} @ ${rh.entryPrice} / Core ${core.side} ${core.size} @ ${core.entryPrice}.`,
+      }), marker);
+      journal = recorded ? 'CSV: вход записан.' : '⚠️ Мониторинг включён. Сохранение CSV в облаке не подтверждено.';
+    }
+    return [
+      `✅ **${norm} ${slot.toUpperCase()}: мониторинг включён**`,
+      ...legs.map((leg) => `• ${leg.name}: ${leg.size} по $${leg.entryPrice}`),
+      `• Спред входа по средним ценам Lighter: **${basisText}** на ${matched} ${norm}, без комиссий и funding.`,
+      ...(rh.size === core.size ? [] : [`⚠️ Незахеджированный остаток: ${Math.abs(rh.size - core.size).toPrecision(8)} ${norm} на ${rh.size > core.size ? 'RH' : 'Core'}.`]),
+      journal,
+      ...(savedConfig ? [] : ['⚠️ GitHub не подтвердил сохранение состояния. Повторите /o для этого кошелька.']),
+    ].join('\n');
+  } catch {
+    return '⚠️ Данные Lighter недоступны. Вход не зарегистрирован.';
+  }
+}
+
+export async function reconcileHedgesFromOnchain(refreshExisting = true): Promise<string> {
+  const config = loadConfig();
+  const lines = ['🔄 **Сверка с Lighter**'];
+  for (const slot of ['w1', 'w2'] as const) {
+    const address = walletAddress(config, slot);
+    if (!address) continue;
+    try {
+      const accounts = await readAccounts(address);
+      const symbols = new Set(accounts.flatMap((account) => account.positions.map((position) => position.symbol)));
+      for (const symbol of symbols) {
+        const alreadyTracked = getActiveHedges(config).some((hedge) => hedge.symbol.toUpperCase() === symbol && getHedgeWallet(config, hedge)?.slot === slot);
+        if (refreshExisting || !alreadyTracked) lines.push((await activateHedgeOnchain(symbol, slot)).split('\n')[0]);
       }
-      const summaryLine = reply.split('\n').find((l) => l.includes('Нога RH'));
-      if (summaryLine) lines.push(summaryLine);
+      for (const hedge of getActiveHedges(config)) {
+        if (getHedgeWallet(config, hedge)?.slot === slot && !symbols.has(hedge.symbol.toUpperCase())) {
+          lines.push(`${hedge.symbol} ${slot.toUpperCase()}: обе ноги отсутствуют. Для подтверждённой записи нажмите «Внести выход».`);
+        }
+      }
+    } catch {
+      lines.push(`${slot.toUpperCase()}: API недоступен, мониторинг сохранён.`);
     }
   }
-
-  if (activated.length === 0 && refreshed.length === 0 && deactivated.length === 0) {
-    lines.push(`💤 Ончейн-позиций нет. Все связки выключены.`);
-  }
-
-  lines.push(``);
-  lines.push(
-    `Итого: активировано **${activated.length}**, обновлено **${refreshed.length}**, снято фантомов **${deactivated.length}**.`
-  );
-  lines.push(`Проверьте \`/status\`. Сирена смотрит только на active === true.`);
-
   return lines.join('\n');
 }
 
-export async function deactivateHedgeOnchain(
-  symbol: string,
-  targetWallet?: 'w1' | 'w2',
-  manualExitPrice?: number
-): Promise<string> {
-  const normSym = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '');
+const closing = new Set<string>();
+
+export async function deactivateHedgeOnchain(symbol: string, targetWallet?: Slot, _manualExitPrice?: number, expectedOpenedAt?: number): Promise<string> {
+  const norm = symbol.toUpperCase().replace(/-(USD|PERP)$/, '');
   const config = loadConfig();
-  const hedge = findHedge(config, normSym, targetWallet);
-
-  if (!hedge) {
-    return `⚠️ Связка **${normSym}**${targetWallet ? ` (${targetWallet.toUpperCase()})` : ''} не найдена среди активных в настройках.`;
+  const matches = getActiveHedges(config).filter((hedge) => hedge.symbol.toUpperCase() === norm &&
+    (!targetWallet || getHedgeWallet(config, hedge)?.slot === targetWallet));
+  if (matches.length !== 1) return matches.length
+    ? `⚠️ ${norm} активен на двух кошельках. Укажите W1 или W2.`
+    : `⚠️ Активная запись ${norm} не найдена. CSV не изменён.`;
+  const hedge = matches[0];
+  if (expectedOpenedAt !== undefined && hedge.createdAt !== expectedOpenedAt) return '⚠️ Эта кнопка относится к другой позиции. Откройте свежий список выходов.';
+  const wallet = getHedgeWallet(config, hedge);
+  const rh = hedge.legs.find((leg) => leg.id.startsWith('rh_'));
+  const core = hedge.legs.find((leg) => leg.id.startsWith('core_'));
+  if (!wallet || hedge.legs.length !== 2 || rh?.venue !== 'lighter' || core?.venue !== 'lighter' || !Number.isFinite(hedge.createdAt)) {
+    return '⚠️ Для сверки нужны кошелёк, время регистрации и две ноги Lighter. Мониторинг сохранён.';
   }
 
-  const success = deactivateHedge(normSym, targetWallet);
-  if (!success) {
-    return `⚠️ Связка **${normSym}**${targetWallet ? ` (${targetWallet.toUpperCase()})` : ''} не найдена среди активных в настройках.`;
+  const key = `${norm}_${wallet.slot}`;
+  if (closing.has(key)) return '⏳ Сверка этого выхода уже выполняется.';
+  closing.add(key);
+  try {
+    const accounts = await readAccounts(wallet.address);
+    const remaining = livePositions(accounts, norm);
+    if (remaining.some(Boolean)) return `⚠️ ${norm} ещё открыт на ${remaining.flatMap((leg, i) => leg ? [venueLabels[i]] : []).join(' и ')}. Мониторинг продолжается.`;
+    const markets = accounts.map((account) => account.markets.get(norm));
+    if (accounts.some((account) => !Number.isSafeInteger(account.index)) || markets.some((market) => !Number.isSafeInteger(market))) {
+      return '⚠️ Не удалось определить счёт или рынок для истории исполнений. Мониторинг сохранён.';
+    }
+    const [rhTrade, coreTrade] = await Promise.all([rh, core].map((leg, i) =>
+      readClosedCycle(venues[i], accounts[i].index!, markets[i]!, leg.side, hedge.createdAt)));
+    if (!rhTrade || !coreTrade) return '⚠️ API пока не подтвердил полный цикл обеих ног. Мониторинг сохранён.';
+    const trades = [rhTrade, coreTrade];
+    const funding = await Promise.all(trades.map((cycle, i) => estimateCycleFunding(venues[i], markets[i]!, cycle)));
+    const fundingTotal = funding[0] === null || funding[1] === null ? null : funding[0] + funding[1];
+    const price = rhTrade.pricePnl + coreTrade.pricePnl;
+    const fees = rhTrade.fees + coreTrade.fees;
+    const closedAt = Math.max(rhTrade.closedAt, coreTrade.closedAt);
+    const round = (amount: number) => Number(amount.toFixed(2));
+    const marker = `[fills:${wallet.slot}:${rhTrade.id}:${coreTrade.id}]`;
+    const legNotes = trades.map((cycle, i) => `${venueLabels[i]} ${cycle.side} ${cycle.size} @ ${cycle.entryPrice.toFixed(6)} → ${cycle.exitPrice.toFixed(6)}${cycle.liquidatedSize ? `, ликвидировано ${cycle.liquidatedSize}` : ''}`);
+    const fundingNote = fundingTotal === null ? 'Funding недоступен.' : `Оценка funding $${fundingTotal.toFixed(2)}. Результат с этой оценкой $${(price - fees + fundingTotal).toFixed(2)}.`;
+    const journaled = await appendRowToCsv(formatCsvExitRow({
+      ...getCurrentTradingWeek(new Date(closedAt)), asset: norm, venue: `Wallet ${wallet.slot === 'w1' ? 1 : 2} (${wallet.slot.toUpperCase()})`,
+      legDescription: `${norm} Closed Hedge`, side: 'Hedge', entryPrice: rhTrade.entryPrice, exitPrice: rhTrade.exitPrice,
+      size: rhTrade.size, margin: rh.margin + core.margin, netPnl: round(price), netBalanceChange: null,
+      notes: `${marker} ${new Date(closedAt).toISOString()}. ${legNotes.join(' / ')}. Комиссии $${fees.toFixed(2)}. ${fundingNote}`,
+    }), marker);
+    if (!journaled) return '⚠️ Исполнения подтверждены, но сохранение CSV не подтверждено. Мониторинг сохранён. Повторите запись выхода.';
+    const fresh = getActiveHedges(loadConfig()).find((item) => item.symbol === hedge.symbol && getHedgeWallet(config, item)?.slot === wallet.slot);
+    if (!fresh || fresh.updatedAt !== hedge.updatedAt || !deactivateHedge(norm, wallet.slot)) {
+      return '⚠️ Исполнения сохранены в CSV. Состояние мониторинга изменилось во время сверки. Проверьте /status.';
+    }
+    if (!await confirmConfigSave()) {
+      saveHedgeConfig(hedge);
+      return '⚠️ Закрытие записано в CSV. GitHub не подтвердил остановку мониторинга. Повторите запись выхода.';
+    }
+    return [
+      `✅ **${norm} ${wallet.slot.toUpperCase()}: закрытие подтверждено сделками Lighter**`,
+      ...legNotes,
+      `• PnL по ценам **$${price.toFixed(2)}**. Комиссии **$${fees.toFixed(2)}**. После комиссий **$${(price - fees).toFixed(2)}**.`,
+      `• ${fundingNote}`,
+      '• Закрытие записано в CSV. Мониторинг этой связки остановлен.',
+    ].join('\n');
+  } catch {
+    return '⚠️ История Lighter недоступна. Закрытие не записано, мониторинг сохранён.';
+  } finally {
+    closing.delete(key);
   }
-
-  const ticker = await fetchLighterTicker(normSym);
-  const exitPrice = manualExitPrice || ticker?.lastTradePrice || ticker?.markPrice || hedge?.legs[0]?.entryPrice || 0;
-
-  const { week, period } = getCurrentTradingWeek();
-
-  // Расчет длительности удержания позиции
-  const openedAt = hedge?.createdAt || (Date.now() - 24 * 3600 * 1000);
-  const closedAt = Date.now();
-  const durationMs = Math.max(0, closedAt - openedAt);
-  const durationHours = parseFloat((durationMs / (1000 * 60 * 60)).toFixed(1));
-
-  const openDateStr = new Date(openedAt).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const closeDateStr = new Date(closedAt).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  const rhLeg = hedge?.legs?.find((l) => l.id?.startsWith('rh_') || !l.name.includes('Core')) || hedge?.legs?.[0];
-  const arbLeg = hedge?.legs?.find((l) => l.id?.startsWith('core_') || l.name.includes('Core')) || hedge?.legs?.[1];
-
-  const rhEntry = rhLeg?.entryPrice || exitPrice;
-  const arbEntry = arbLeg?.entryPrice || exitPrice;
-  const rhSize = rhLeg?.size || 0;
-  const arbSize = arbLeg?.size || 0;
-  const totalMargin = (rhLeg?.margin || 0) + (arbLeg?.margin || 0);
-
-  // Расчет реального PnL:
-  // Short PnL = (entry - exit) * size
-  // Long PnL = (exit - entry) * size
-  const rhIsLong = rhLeg?.side === 'long';
-  const arbIsLong = arbLeg?.side === 'long';
-  const rhPnl = parseFloat(
-    (rhIsLong ? (exitPrice - rhEntry) * rhSize : (rhEntry - exitPrice) * rhSize).toFixed(2)
-  );
-  const arbPnl = parseFloat(
-    (arbIsLong ? (exitPrice - arbEntry) * arbSize : (arbEntry - exitPrice) * arbSize).toFixed(2)
-  );
-  const netPnl = parseFloat((rhPnl + arbPnl).toFixed(2));
-  const netBalanceChange = netPnl;
-
-  // Определение имени кошелька для Venue в CSV
-  const slot = hedge.walletSlot?.toLowerCase() || targetWallet?.toLowerCase();
-  const walletVenue = slot === 'w2' ? 'Wallet 2 (W2)' : slot === 'w1' ? 'Wallet 1 (W1)' : 'Robinhood + Arbitrum';
-  const walletLabel = slot ? ` (${slot.toUpperCase()})` : '';
-
-  const durationNote = `${durationHours}ч (с ${openDateStr} по ${closeDateStr})`;
-  const netPnlStr = netPnl >= 0 ? `+$${netPnl}` : `-$${Math.abs(netPnl)}`;
-  const rhPnlStr = rhPnl >= 0 ? `+$${rhPnl}` : `-$${Math.abs(rhPnl)}`;
-  const arbPnlStr = arbPnl >= 0 ? `+$${arbPnl}` : `-$${Math.abs(arbPnl)}`;
-  const notes = `Closed via /c ${normSym}${walletLabel} (${durationNote}. Exit: $${exitPrice}, Net PnL: ${netPnlStr})`;
-
-  const csvRow = formatCsvExitRow({
-    week,
-    period,
-    asset: normSym,
-    venue: walletVenue,
-    legDescription: `${normSym} Closed Hedge${walletLabel}`,
-    side: 'Delta-Neutral',
-    entryPrice: rhEntry,
-    exitPrice,
-    size: rhSize,
-    margin: totalMargin,
-    netPnl,
-    netBalanceChange,
-    notes,
-  });
-  appendRowToCsv(csvRow);
-
-  return [
-    `🛑 **ПОЗИЦИЯ ${normSym}${walletLabel} УСПЕШНО ЗАКРЫТА!**`,
-    `━━━━━━━━━━━━━━━━━━━━`,
-    `• Кошелек: **${walletVenue}**`,
-    `• Связка деактивирована в \`config.json\` (\`active: false\`).`,
-    `• ⏱ **Время удержания:** **${durationNote}**`,
-    `• 💵 **Цены исполнения:** Вход RH: **$${rhEntry}** | Arb: **$${arbEntry}** ➔ Выход: **$${exitPrice}**`,
-    `• 📊 **Финансовый результат:**`,
-    `  - RH Short: **${rhPnlStr}**`,
-    `  - Arb Long: **${arbPnlStr}**`,
-    `  - Итоговый Net PnL: **${netPnlStr}**`,
-    `• 🔕 **Мониторинг ликвидаций и сирена по ${normSym}${walletLabel} остановлены.**`,
-    `• 📝 Запись с датами и результатом внесена в \`pnl_and_points_analysis.csv\`.`,
-  ].join('\n');
 }
-

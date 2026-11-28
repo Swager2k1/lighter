@@ -1,17 +1,17 @@
 const LIGHTER_BASE_URL = 'https://api.rh.lighter.xyz';
 const LIGHTER_ARB_BASE_URL = 'https://mainnet.zklighter.elliot.ai';
 // Кеш соответствия symbol -> marketId
-let marketCache = new Map();
-let cacheTimestamp = 0;
+const marketCaches = new Map();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 минут
-export async function getLighterMarketId(symbol) {
+export async function getLighterMarketId(symbol, venue = 'rh') {
     const normSymbol = symbol.toUpperCase().replace('-USD', '').replace('-PERP', '');
     const now = Date.now();
-    if (marketCache.size > 0 && now - cacheTimestamp < CACHE_TTL_MS) {
-        return marketCache.get(normSymbol) ?? null;
-    }
+    const cached = marketCaches.get(venue);
+    if (cached && now - cached.timestamp < CACHE_TTL_MS)
+        return cached.markets.get(normSymbol) ?? null;
+    const base = venue === 'rh' ? LIGHTER_BASE_URL : LIGHTER_ARB_BASE_URL;
     try {
-        const res = await fetch(`${LIGHTER_BASE_URL}/api/v1/orderBooks`, {
+        const res = await fetch(`${base}/api/v1/orderBooks`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
             signal: AbortSignal.timeout(6000),
         });
@@ -23,22 +23,22 @@ export async function getLighterMarketId(symbol) {
         for (const ob of data.order_books || []) {
             newCache.set(ob.symbol.toUpperCase(), ob.market_id);
         }
-        marketCache = newCache;
-        cacheTimestamp = now;
-        return marketCache.get(normSymbol) ?? null;
+        marketCaches.set(venue, { markets: newCache, timestamp: now });
+        return newCache.get(normSymbol) ?? null;
     }
     catch (err) {
         console.error(`[Lighter] Ошибка загрузки списка рынков:`, err);
-        return marketCache.get(normSymbol) ?? null;
+        return cached?.markets.get(normSymbol) ?? null;
     }
 }
-export async function fetchLighterTicker(symbol) {
-    const marketId = await getLighterMarketId(symbol);
+export async function fetchLighterTicker(symbol, venue = 'rh') {
+    const marketId = await getLighterMarketId(symbol, venue);
+    const base = venue === 'rh' ? LIGHTER_BASE_URL : LIGHTER_ARB_BASE_URL;
     if (marketId === null) {
         return null;
     }
     try {
-        const res = await fetch(`${LIGHTER_BASE_URL}/api/v1/orderBookDetails?market_id=${marketId}`, {
+        const res = await fetch(`${base}/api/v1/orderBookDetails?market_id=${marketId}`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
             signal: AbortSignal.timeout(6000),
         });
@@ -72,53 +72,65 @@ export async function fetchLighterTicker(symbol) {
         return null;
     }
 }
-/**
- * Запрос открытых ончейн-позиций аккаунта через официальный API Lighter (Robinhood или Arbitrum Core)
- */
-export async function fetchLighterPositions(accountOrAddress, venue = 'rh') {
-    if (!accountOrAddress || accountOrAddress.trim() === '') {
-        return [];
+export async function lighterGet(venue, endpoint, params) {
+    const base = venue === 'arb' ? LIGHTER_ARB_BASE_URL : LIGHTER_BASE_URL;
+    const response = await fetch(`${base}/api/v1/${endpoint}?${params}`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok)
+        throw new Error(`Lighter ${venue}: HTTP ${response.status}`);
+    const data = await response.json();
+    if (data.code !== undefined && data.code !== 200)
+        throw new Error(`Lighter ${venue}: code ${data.code}`);
+    return data;
+}
+export async function readLighterAccount(address, venue) {
+    if (!address.trim())
+        throw new Error('Lighter wallet is not configured');
+    const { accounts } = await lighterGet(venue, 'account', new URLSearchParams({ by: 'l1_address', value: address.trim() }));
+    if (!Array.isArray(accounts) || accounts.length !== 1 || !Array.isArray(accounts[0]?.positions)) {
+        throw new Error(`Lighter ${venue}: cannot identify a single account with positions`);
     }
-    const baseUrl = venue === 'arb' ? LIGHTER_ARB_BASE_URL : LIGHTER_BASE_URL;
-    try {
-        const res = await fetch(`${baseUrl}/api/v1/account?by=l1_address&value=${accountOrAddress.trim()}`, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-                Accept: 'application/json',
-            },
-            signal: AbortSignal.timeout(8000),
+    const account = accounts[0];
+    const index = account.account_index ?? account.index;
+    const markets = new Map();
+    const positions = [];
+    for (const raw of account.positions) {
+        const symbol = raw.symbol.toUpperCase();
+        const size = Math.abs(Number(raw.position));
+        if (!Number.isFinite(size))
+            throw new Error('Invalid Lighter position quantity');
+        markets.set(symbol, raw.market_id);
+        if (!size)
+            continue;
+        const entryPrice = Number(raw.avg_entry_price);
+        if (!(entryPrice > 0) || (raw.sign !== -1 && raw.sign !== 1))
+            throw new Error('Invalid Lighter open position');
+        positions.push({
+            symbol, size, entryPrice, sizeDecimals: raw.position.split('.')[1]?.length ?? 0,
+            side: raw.sign === -1 ? 'short' : 'long',
+            pnl: Number(raw.unrealized_pnl) || 0, marketIndex: raw.market_id,
+            liquidationPrice: Number(raw.liquidation_price) || 0,
+            positionValue: Number(raw.position_value) || 0,
+            allocatedMargin: Number(raw.allocated_margin) || 0,
+            accountCollateral: Number(account.collateral) || 0,
+            initialMarginFraction: Number(raw.initial_margin_fraction) || 0,
         });
-        if (!res.ok) {
-            return [];
-        }
-        const data = (await res.json());
-        const rawPositions = data.accounts?.[0]?.positions;
-        const accountCollateral = parseFloat(data.accounts?.[0]?.collateral || '0') || 0;
-        if (!Array.isArray(rawPositions))
-            return [];
-        const result = [];
-        for (const pos of rawPositions) {
-            const size = parseFloat(pos.position) || 0;
-            if (size <= 0)
-                continue; // Пропускаем нулевые/закрытые записи
-            result.push({
-                symbol: pos.symbol.toUpperCase(),
-                side: pos.sign === -1 ? 'short' : 'long',
-                entryPrice: parseFloat(pos.avg_entry_price) || 0,
-                size,
-                pnl: parseFloat(pos.unrealized_pnl) || 0,
-                marketIndex: pos.market_id,
-                liquidationPrice: parseFloat(pos.liquidation_price) || 0,
-                positionValue: parseFloat(pos.position_value) || 0,
-                allocatedMargin: parseFloat(pos.allocated_margin || '0') || 0,
-                accountCollateral,
-                initialMarginFraction: parseFloat(pos.initial_margin_fraction || '0') || 0,
-            });
-        }
-        return result;
     }
-    catch (err) {
-        console.error(`[Lighter ${venue.toUpperCase()}] Ошибка чтения позиций для ${accountOrAddress}:`, err);
+    return {
+        index, positions, markets,
+        equity: Number(account.total_asset_value ?? account.collateral),
+        available: Number(account.available_balance),
+    };
+}
+export async function fetchLighterPositions(address, venue = 'rh') {
+    if (!address.trim())
+        return [];
+    try {
+        return (await readLighterAccount(address, venue)).positions;
+    }
+    catch {
         return [];
     }
 }

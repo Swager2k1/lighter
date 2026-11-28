@@ -37,6 +37,33 @@ export class GithubSyncService {
     return Boolean(this.token && this.token.trim().length > 0);
   }
 
+  public async waitForWrites(): Promise<void> {
+    await this.queue;
+  }
+
+  public async readRuntimeFiles(): Promise<{ config: string; journal: string }> {
+    const headers = {
+      Authorization: `Bearer ${this.token}`,
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'LighterHedger-CloudWorker',
+    };
+    const base = `https://api.github.com/repos/${this.repo}`;
+    const get = async <T>(route: string): Promise<T> => {
+      const response = await fetch(base + route, { headers, signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error(`GitHub runtime state HTTP ${response.status}`);
+      return await response.json() as T;
+    };
+    const ref = await get<{ object?: { sha?: string } }>(`/git/ref/heads/${encodeURIComponent(this.branch)}`);
+    if (!/^[0-9a-f]{40}$/.test(ref.object?.sha ?? '')) throw new Error('Invalid GitHub state reference');
+    const read = async (name: string) => {
+      const file = await get<{ encoding?: string; content?: string }>(`/contents/${name}?ref=${ref.object!.sha}`);
+      if (file.encoding !== 'base64' || !file.content) throw new Error(`GitHub state file not returned: ${name}`);
+      return Buffer.from(file.content, 'base64').toString('utf8');
+    };
+    const [config, journal] = await Promise.all([read('config.json'), read('pnl_and_points_analysis.csv')]);
+    return { config, journal };
+  }
+
   /**
    * Получение текущего SHA файла в репозитории (null если файл не существует)
    */
@@ -49,6 +76,7 @@ export class GithubSyncService {
     try {
       const res = await fetch(url, {
         method: 'GET',
+        signal: AbortSignal.timeout(8000),
         headers: {
           'Authorization': `Bearer ${this.token}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -136,9 +164,8 @@ export class GithubSyncService {
     const cleanPath = filePath.replace(/^\/+/, '');
     const sha = await this.getFileSha(cleanPath);
     const contentBase64 = Buffer.from(content, 'utf-8').toString('base64');
-    const finalMessage = commitMessage.includes('[skip ci]')
-      ? commitMessage
-      : `${commitMessage} [skip ci]`;
+    const finalMessage = ['[skip ci]', '[skip render]'].reduce((message, tag) =>
+      message.includes(tag) ? message : `${message} ${tag}`, commitMessage);
 
     const url = `https://api.github.com/repos/${this.repo}/contents/${cleanPath}`;
     const payload: {
@@ -159,6 +186,7 @@ export class GithubSyncService {
     try {
       const res = await fetch(url, {
         method: 'PUT',
+        signal: AbortSignal.timeout(8000),
         headers: {
           'Authorization': `Bearer ${this.token}`,
           'Accept': 'application/vnd.github.v3+json',

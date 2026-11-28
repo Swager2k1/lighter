@@ -171,10 +171,10 @@ test('concurrent syncFile calls are queued sequentially without collision', asyn
 
     // Должно выполниться строго по очереди: start:config -> end:config -> start:csv -> end:csv
     assert.deepEqual(executionLog, [
-      'start:sync: config [skip ci]',
-      'end:sync: config [skip ci]',
-      'start:sync: csv [skip ci]',
-      'end:sync: csv [skip ci]',
+      'start:sync: config [skip ci] [skip render]',
+      'end:sync: config [skip ci] [skip render]',
+      'start:sync: csv [skip ci] [skip render]',
+      'end:sync: csv [skip ci] [skip render]',
     ]);
   } finally {
     globalThis.fetch = originalFetch;
@@ -182,4 +182,21 @@ test('concurrent syncFile calls are queued sequentially without collision', asyn
 });
 
 
+
+
+test('Render bootstrap reads config and journal at the same GitHub revision', async (t) => {
+  const { GithubSyncService } = await import('../src/services/githubSyncService.js');
+  const digest = '1'.repeat(40);
+  const requests: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: string) => {
+    requests.push(input);
+    if (input.includes('/git/ref/heads/')) return Response.json({ object: { sha: digest } });
+    const content = input.includes('config.json') ? '{"hedges":[]}' : 'Week,Period,Asset,Venue';
+    return Response.json({ encoding: 'base64', content: Buffer.from(content).toString('base64') });
+  });
+  const sync = new GithubSyncService({ token: 'test', repo: 'test/test', branch: 'main' });
+  assert.deepEqual(await sync.readRuntimeFiles(), { config: '{"hedges":[]}', journal: 'Week,Period,Asset,Venue' });
+  assert.equal(requests.length, 3);
+  assert.ok(requests.slice(1).every((url) => url.endsWith('?ref=' + digest)));
+});
 

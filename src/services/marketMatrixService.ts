@@ -1,5 +1,6 @@
 import { getEarningsInfo, getReportingWeekInterval } from './calendarService.js';
-import { fetchLiveWalletEquity } from './rebalanceService.js';
+import { readLighterAccount } from '../connectors/lighter.js';
+import { getHedgeWallet } from './positionSyncService.js';
 import { loadConfig, getActiveHedges, FullConfig } from '../config.js';
 
 export interface OrderbookLevel {
@@ -18,6 +19,7 @@ export interface DynamicNotionalSizing {
 export interface OrderbookWalkResult {
   exhausted: boolean;
   executedNotional: number;
+  baseQuantity: number;
   avgSellPrice: number;
   avgBuyPrice: number;
   lossUsd: number;
@@ -46,6 +48,14 @@ export interface MarketMatrixRow {
   macroRisk: string;
   verdict: string;
   isNewListing?: boolean;
+  fullDepth?: boolean;
+  halfDepth?: boolean;
+  availableFull?: boolean;
+  availableHalf?: boolean;
+  fullSize?: number;
+  halfSize?: number;
+  observedAt?: string;
+  unavailableReason?: string;
 }
 
 export const KNOWN_STOCKS = new Set([
@@ -209,10 +219,10 @@ export function sortMarketMatrixRows(rows: MarketMatrixRow[]): MarketMatrixRow[]
 }
 
 export function calculateDynamicNotional(totalEquity: number, leverage = 7): DynamicNotionalSizing {
-  const safeEquity = totalEquity > 0 ? totalEquity : 10000;
-  const margin100Pct = parseFloat((safeEquity / 2).toFixed(2));
+  const safeEquity = Number.isFinite(totalEquity) && totalEquity > 0 ? totalEquity : 0;
+  const margin100Pct = Math.floor(safeEquity * 50) / 100;
   const notional100Pct = parseFloat((margin100Pct * leverage).toFixed(2));
-  const margin50Pct = parseFloat((safeEquity / 4).toFixed(2));
+  const margin50Pct = Math.floor(safeEquity * 25) / 100;
   const notional50Pct = parseFloat((margin50Pct * leverage).toFixed(2));
 
   return {
@@ -224,68 +234,56 @@ export function calculateDynamicNotional(totalEquity: number, leverage = 7): Dyn
   };
 }
 
+export function fillBookQuantity(levels: OrderbookLevel[], quantity: number) {
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+  let remaining = quantity;
+  let cash = 0;
+  for (const level of levels) {
+    if (!(level.price > 0 && level.size > 0)) continue;
+    const take = Math.min(remaining, level.size);
+    cash += take * level.price;
+    remaining -= take;
+    if (remaining <= 1e-9) return { cash, average: cash / quantity };
+  }
+  return null;
+}
+
 export function simulateOrderbookWalk(params: {
   targetNotional: number;
   sellSideLevels: OrderbookLevel[];
   buySideLevels: OrderbookLevel[];
+  sizeDecimals?: number;
 }): OrderbookWalkResult {
   const { targetNotional, sellSideLevels, buySideLevels } = params;
-
-  let remainingSellNotional = targetNotional;
-  let totalSellUnits = 0;
-  let totalSellCash = 0;
-
-  for (const lvl of sellSideLevels) {
-    const lvlCash = lvl.price * lvl.size;
-    if (lvlCash <= 0) continue;
-    if (remainingSellNotional <= lvlCash) {
-      const units = remainingSellNotional / lvl.price;
-      totalSellUnits += units;
-      totalSellCash += remainingSellNotional;
-      remainingSellNotional = 0;
-      break;
-    } else {
-      totalSellUnits += lvl.size;
-      totalSellCash += lvlCash;
-      remainingSellNotional -= lvlCash;
+  if (!(Number.isFinite(targetNotional) && targetNotional > 0)) throw new Error('Invalid target notional');
+  const unitsAtBudget = (levels: OrderbookLevel[]) => {
+    let remaining = targetNotional;
+    let units = 0;
+    for (const level of levels) {
+      if (!(level.price > 0 && level.size > 0)) continue;
+      const cash = Math.min(remaining, level.size * level.price);
+      units += cash / level.price;
+      remaining -= cash;
+      if (remaining <= 1e-8) break;
     }
-  }
-
-  let remainingBuyNotional = targetNotional;
-  let totalBuyUnits = 0;
-  let totalBuyCash = 0;
-
-  for (const lvl of buySideLevels) {
-    const lvlCash = lvl.price * lvl.size;
-    if (lvlCash <= 0) continue;
-    if (remainingBuyNotional <= lvlCash) {
-      const units = remainingBuyNotional / lvl.price;
-      totalBuyUnits += units;
-      totalBuyCash += remainingBuyNotional;
-      remainingBuyNotional = 0;
-      break;
-    } else {
-      totalBuyUnits += lvl.size;
-      totalBuyCash += lvlCash;
-      remainingBuyNotional -= lvlCash;
-    }
-  }
-
-  const exhausted = remainingSellNotional > 0 || remainingBuyNotional > 0;
-  const avgSellPrice = totalSellUnits > 0 ? totalSellCash / totalSellUnits : 0;
-  const avgBuyPrice = totalBuyUnits > 0 ? totalBuyCash / totalBuyUnits : 0;
-
-  const baseQty = Math.min(totalSellUnits, totalBuyUnits);
-  const lossUsd = baseQty > 0 ? parseFloat(((avgBuyPrice - avgSellPrice) * baseQty).toFixed(2)) : 0;
-  const lossPct = targetNotional > 0 ? parseFloat(((lossUsd / targetNotional) * 100).toFixed(3)) : 0;
-
+    return { units, exhausted: remaining > 1e-8 };
+  };
+  const sellCapacity = unitsAtBudget(sellSideLevels);
+  const buyCapacity = unitsAtBudget(buySideLevels);
+  const capacity = Math.min(sellCapacity.units, buyCapacity.units);
+  const scale = 10 ** (params.sizeDecimals ?? 8);
+  const baseQuantity = Math.floor(capacity * scale) / scale;
+  const sell = fillBookQuantity(sellSideLevels, baseQuantity);
+  const buy = fillBookQuantity(buySideLevels, baseQuantity);
+  const loss = sell && buy ? buy.cash - sell.cash : 0;
   return {
-    exhausted,
-    executedNotional: Math.min(totalSellCash, totalBuyCash),
-    avgSellPrice: parseFloat(avgSellPrice.toFixed(4)),
-    avgBuyPrice: parseFloat(avgBuyPrice.toFixed(4)),
-    lossUsd,
-    lossPct,
+    exhausted: sellCapacity.exhausted || buyCapacity.exhausted || !sell || !buy,
+    baseQuantity,
+    executedNotional: sell?.cash ?? 0,
+    avgSellPrice: sell?.average ?? 0,
+    avgBuyPrice: buy?.average ?? 0,
+    lossUsd: Number(loss.toFixed(2)),
+    lossPct: sell?.cash ? Number((100 * loss / sell.cash).toFixed(3)) : 0,
   };
 }
 
@@ -318,27 +316,16 @@ export function formatTopCardsMessage(params: {
   ];
 
   if (mode === 'open') {
-    lines.push(
-      `🔥 **БУСТЫ НЕДЕЛИ: LIGHTER POINTS PROGRAM**`,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `• ⚡️ **Earnings Boost (Квартальные отчеты недели):**`,
-      `  - **$NVDA** (18.11 AMC | через 5д) — главный AI-отчет сезона. Закрыть до 17.11 20:00 UTC`,
-      `  - **$BABA** (19.11 BMO | через 6д) — китайский e-commerce лидер. Закрыть до 18.11 20:00 UTC`,
-      `  *(Дает максимальную долю распределения в еженедельном пуле Weekly Points)*`,
-      `• 🚀 **Pre-IPO & Low-OI пулы:**`,
-      `  - **$OPENAI**, **$ANTHROPIC**, **$CRCL**, **$SHEIN** — низкий OI (макс. yield поинтов на $1k)`,
-      `• 🛡 **Канонический Hedge Boost (2.5x):**`,
-      `  - Вектор Robinhood SHORT + Arbitrum Core LONG дает **2.5x** ко всем начислениям`,
-      ``
-    );
+    lines.push('RH SHORT + Core LONG. Оценка по снимкам стаканов, без комиссий и funding. Количество на обеих ногах одинаковое. Сценарий предполагает установленное плечо 7×.', '');
   }
 
   lines.push(
     `🏆 **${title}**`,
-    `*(Приоритет: 🔥 Бусты недели → 📈 Акции по мин. Loss 100% → 🌐 Другие пары)*`,
+    `*Сортировка карточек по стоимости входа на полном объёме.*`,
     `━━━━━━━━━━━━━━━━━━━━`
   );
 
+  if (!topRows.length) lines.push('Нет доступных оценок для полного объёма. Проверьте ограничения и сценарии 50% в JSON.');
   topRows.forEach((r, idx) => {
     let categoryBadge = r.isStock ? '📈 [АКЦИЯ]' : '🌐 [ДРУГОЙ РЫНОК]';
     if (r.hasEarningsBoost) {
@@ -347,16 +334,13 @@ export function formatTopCardsMessage(params: {
 
     const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)}` : `-$${r.loss100Usd}`;
     const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)}` : `-$${r.loss50Usd}`;
-    const loss100PctStr = r.loss100Pct <= 0 ? `+${Math.abs(r.loss100Pct)}%` : `${r.loss100Pct}%`;
-    const loss50PctStr = r.loss50Pct <= 0 ? `+${Math.abs(r.loss50Pct)}%` : `${r.loss50Pct}%`;
 
     lines.push(
       `${idx + 1}. ${categoryBadge} **$${r.symbol}** (${r.earningsText})`,
-      `   • Потери 100%: **${loss100Str}** (${loss100PctStr}) | 50%: **${loss50Str}** (${loss50PctStr})`,
+      `   • Спред 100%: **${loss100Str}** | 50%: **${r.availableHalf === false ? 'оценка недоступна' : loss50Str}**`,
       `   • OI RH: **${formatCompactUsd(r.oiRobinhoodUsd)}** 🟢 | OI Arb: **${formatCompactUsd(r.oiArbitrumUsd)}**`,
       `   • Стенки RH/Arb: **${r.wallRhL1}** / **${r.wallArbL1}** (макс 1 стенка: $${r.maxEntryWallUsd})`,
       `   • Спред краёв: **${r.edgeSpreadPct}%**`,
-      `   • 💡 Вердикт: *${r.verdict}*`,
       ``
     );
   });
@@ -365,7 +349,7 @@ export function formatTopCardsMessage(params: {
   return lines.join('\n');
 }
 
-export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: DynamicNotionalSizing): string {
+export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: DynamicNotionalSizing, wallet?: string, mode: 'open' | 'close' = 'open'): string {
   // 1. Разделение на три секции: Бусты -> Акции (без буста) -> Другие рынки (без буста)
   const boosts = rows.filter((r) => r.hasEarningsBoost);
   const stocks = rows.filter((r) => r.isStock && !r.hasEarningsBoost);
@@ -412,8 +396,14 @@ export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: Dynam
       has_boost: r.hasEarningsBoost,
       earnings: r.earningsText,
       days_until_earnings: r.daysUntilEarnings < 9999 ? r.daysUntilEarnings : null,
-      loss_market_100pct: loss100Str,
-      loss_market_50pct: loss50Str,
+      loss_market_100pct: r.availableFull === false ? null : loss100Str,
+      sufficient_depth_100pct: r.fullDepth ?? null,
+      matched_quantity_100pct: r.availableFull === false ? null : r.fullSize ?? null,
+      loss_market_50pct: r.availableHalf === false ? null : loss50Str,
+      sufficient_depth_50pct: r.halfDepth ?? null,
+      matched_quantity_50pct: r.availableHalf === false ? null : r.halfSize ?? null,
+      observed_at: r.observedAt ?? null,
+      unavailable_reason: r.unavailableReason ?? null,
       oi_robinhood: formatCompactUsd(r.oiRobinhoodUsd),
       oi_arbitrum: formatCompactUsd(r.oiArbitrumUsd),
       walls_rh_bid_l1_l2: `${r.wallRhL1} / ${r.wallRhL2}`,
@@ -426,8 +416,12 @@ export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: Dynam
   };
 
   const data = {
-    generated_at: new Date().toLocaleString(),
-    portfolio_equity_usd: sizing.totalEquity,
+    generated_at: new Date().toISOString(),
+    wallet,
+    direction: mode === 'open' ? 'RH SHORT / Core LONG' : 'RH buy / Core sell',
+    includes_fees_or_funding: false,
+    portfolio_equity_usd: Number.isFinite(sizing.totalEquity) ? sizing.totalEquity : null,
+    margin_per_leg_100pct_usd: sizing.margin100Pct,
     notional_100pct_7x_usd: sizing.notional100Pct,
     notional_50pct_7x_usd: sizing.notional50Pct,
     total_markets: orderedMarkets.length,
@@ -492,7 +486,10 @@ export async function fetchOrderBookOrders(
       size: parseFloat(a.remaining_base_amount || a.initial_base_amount || a.size || '0') || 0,
     }));
 
-    return { bids, asks };
+    return {
+      bids: bids.filter((level) => level.price > 0 && level.size > 0).sort((a, b) => b.price - a.price),
+      asks: asks.filter((level) => level.price > 0 && level.size > 0).sort((a, b) => a.price - b.price),
+    };
   } catch {
     return { bids: [], asks: [] };
   }
@@ -509,58 +506,27 @@ export async function scanCanonicalMarketMatrix(
   const w1Addr = config.wallets.robinhoodWallet1?.trim() || '';
   const w2Addr = config.wallets.robinhoodWallet2?.trim() || '';
 
-  // 1. Live Audit Балансов
-  const [w1Live, w2Live] = await Promise.all([
-    w1Addr ? fetchLiveWalletEquity(w1Addr) : Promise.resolve({ rhEquity: 0, rhCollateral: 0, arbEquity: 0, arbCollateral: 0 }),
-    w2Addr ? fetchLiveWalletEquity(w2Addr) : Promise.resolve({ rhEquity: 0, rhCollateral: 0, arbEquity: 0, arbCollateral: 0 }),
-  ]);
-
-  const activeHedges = getActiveHedges(config);
-  const w1Active = activeHedges.some((h) =>
-    h.legs.some((l) => l.walletAddress?.toLowerCase() === w1Addr.toLowerCase())
-  );
-  const w2Active = activeHedges.some((h) =>
-    h.legs.some((l) => l.walletAddress?.toLowerCase() === w2Addr.toLowerCase())
-  );
-
-  let selectedWallet: 'w1' | 'w2' | 'all' = targetWalletArg || 'all';
-
-  if (!targetWalletArg) {
-    if (w1Active && !w2Active) {
-      selectedWallet = 'w2';
-    } else if (!w1Active && w2Active) {
-      selectedWallet = 'w1';
-    } else if (w2Addr && !w1Addr) {
-      selectedWallet = 'w2';
-    } else {
-      selectedWallet = 'w1';
-    }
+  const active = getActiveHedges(config);
+  const occupied = (slot: 'w1' | 'w2') => active.some((hedge) => getHedgeWallet(config, hedge)?.slot === slot);
+  const selected = targetWalletArg ?? (w2Addr && (!w1Addr || (occupied('w1') && !occupied('w2'))) ? 'w2' : 'w1');
+  if (selected === 'all') throw new Error('Выберите W1 или W2. Стакан и размер рассчитываются для одного кошелька.');
+  const address = selected === 'w1' ? w1Addr : w2Addr;
+  let rh, arb;
+  try {
+    [rh, arb] = await Promise.all([readLighterAccount(address, 'rh'), readLighterAccount(address, 'arb')]);
+  } catch {
+    throw new Error('Не удалось проверить свободную маржу на обеих площадках Lighter. Расчёт входа недоступен.');
   }
-
-  const w1Total = parseFloat((w1Live.rhEquity + w1Live.arbEquity).toFixed(2));
-  const w2Total = parseFloat((w2Live.rhEquity + w2Live.arbEquity).toFixed(2));
-  const combinedTotal = parseFloat((w1Total + w2Total).toFixed(2));
-
-  let targetEquity: number;
-  let targetWalletLabel: string;
-
-  if (selectedWallet === 'w2') {
-    targetEquity = w2Total > 0 ? w2Total : 4900;
-    targetWalletLabel = `🎯 Расчёт для: **Wallet 2 (W2)** (ончейн: **$${targetEquity.toFixed(2)}**)`;
-  } else if (selectedWallet === 'w1') {
-    targetEquity = w1Total > 0 ? w1Total : 9800;
-    targetWalletLabel = `🎯 Расчёт для: **Wallet 1 (W1)** (ончейн: **$${targetEquity.toFixed(2)}**)`;
-  } else {
-    targetEquity = combinedTotal > 0 ? combinedTotal : 15000;
-    targetWalletLabel = `🎯 Расчёт для: **Весь портфель (W1 + W2)** ($${targetEquity.toFixed(2)})`;
+  const marginPerLeg = Math.min(rh.available, arb.available);
+  if (!(marginPerLeg > 0 && Number.isFinite(marginPerLeg))) {
+    throw new Error('Для расчёта нужна положительная свободная маржа на обеих площадках.');
   }
-
-  const sizing = calculateDynamicNotional(targetEquity, 7);
-
+  const sizing = calculateDynamicNotional(2 * marginPerLeg, 7);
+  if (!sizing.notional50Pct) throw new Error('Свободной маржи недостаточно для расчёта двух сценариев.');
   const walletsSummary = [
-    `• W1 (Total $${w1Total.toFixed(2)}): RH $${w1Live.rhEquity.toFixed(2)} | Arb $${w1Live.arbEquity.toFixed(2)}${w1Active ? ' 🔒 (Занят)' : ' 🟢 (Свободен)'}`,
-    `• W2 (Total $${w2Total.toFixed(2)}): RH $${w2Live.rhEquity.toFixed(2)} | Arb $${w2Live.arbEquity.toFixed(2)}${w2Active ? ' 🔒 (Занят)' : ' 🟢 (Свободен)'}`,
-    targetWalletLabel,
+    `• Кошелёк: **${selected.toUpperCase()}**`,
+    `• Свободная маржа: RH **$${rh.available.toFixed(2)}** | Core **$${arb.available.toFixed(2)}**`,
+    'Размер каждой ноги ограничен меньшей из двух свободных марж.',
   ].join('\n');
 
   // 2. Динамический запрос реестра рынков с обеих бирж
@@ -572,6 +538,11 @@ export async function scanCanonicalMarketMatrix(
       order_book_details?: Array<{
         symbol: string;
         market_id: number;
+        supported_size_decimals?: number;
+        size_decimals?: number;
+        min_initial_margin_fraction?: number;
+        min_base_amount?: string;
+        min_quote_amount?: string;
         status?: string;
         is_frozen?: boolean;
         created_at?: string;
@@ -588,6 +559,11 @@ export async function scanCanonicalMarketMatrix(
       order_book_details?: Array<{
         symbol: string;
         market_id: number;
+        supported_size_decimals?: number;
+        size_decimals?: number;
+        min_initial_margin_fraction?: number;
+        min_base_amount?: string;
+        min_quote_amount?: string;
         status?: string;
         is_frozen?: boolean;
         created_at?: string;
@@ -725,26 +701,34 @@ export async function scanCanonicalMarketMatrix(
           edgeSpreadPct = parseFloat((((rhAsks[0].price - arbBids[0].price) / arbBids[0].price) * 100).toFixed(3));
         }
 
+        const sizeDecimals = Math.min(rhInfo.supported_size_decimals ?? rhInfo.size_decimals ?? 8, arbInfo.supported_size_decimals ?? arbInfo.size_decimals ?? 8);
         const walk100 = simulateOrderbookWalk({
+          sizeDecimals,
           targetNotional: sizing.notional100Pct,
           sellSideLevels: sellSide,
           buySideLevels: buySide,
         });
 
         const walk50 = simulateOrderbookWalk({
+          sizeDecimals,
           targetNotional: sizing.notional50Pct,
           sellSideLevels: sellSide,
           buySideLevels: buySide,
         });
 
-        let verdict = 'БИТЬ МАРКЕТОМ';
-        if (walk100.lossPct > 0.15 || maxEntryWall < 2000) {
-          verdict = 'ЛИМИТНИК POST-ONLY (Тонкий стакан)';
-        } else if (hasBoost) {
-          verdict = isNewListing ? 'БИТЬ МАРКЕТОМ (🔥 Буст листинга)' : 'БИТЬ МАРКЕТОМ (🔥 Буст отчетов)';
-        } else if (oiRh < 800000) {
-          verdict = 'БИТЬ МАРКЕТОМ (🟢 Low OI yield)';
-        }
+        const allowedLeverage = Math.max(rhInfo.min_initial_margin_fraction ?? 0, arbInfo.min_initial_margin_fraction ?? 0) * 7 <= 10_000;
+        const meetsLimits = (walk: OrderbookWalkResult) => walk.baseQuantity >= Math.max(Number(rhInfo.min_base_amount ?? 0), Number(arbInfo.min_base_amount ?? 0)) &&
+          walk.baseQuantity * walk.avgSellPrice >= Number(rhInfo.min_quote_amount ?? 0) &&
+          walk.baseQuantity * walk.avgBuyPrice >= Number(arbInfo.min_quote_amount ?? 0);
+        const fullDepth = !walk100.exhausted;
+        const halfDepth = !walk50.exhausted;
+        const availableFull = allowedLeverage && fullDepth && meetsLimits(walk100);
+        const availableHalf = allowedLeverage && halfDepth && meetsLimits(walk50);
+        const unavailableReason = availableFull ? undefined
+          : !allowedLeverage ? 'Плечо 7× выше лимита рынка'
+          : !fullDepth ? 'Недостаточно видимой глубины для 100%'
+          : 'Полный сценарий ниже минимального размера рынка';
+        const verdict = unavailableReason ?? 'Оценка исполнения по доступным заявкам';
 
         rows.push({
           symbol: sym,
@@ -768,6 +752,14 @@ export async function scanCanonicalMarketMatrix(
           macroRisk: macro,
           verdict,
           isNewListing,
+          fullDepth,
+          halfDepth,
+          availableFull,
+          availableHalf,
+          unavailableReason,
+          fullSize: walk100.baseQuantity,
+          halfSize: walk50.baseQuantity,
+          observedAt: new Date().toISOString(),
         });
       })
     );
@@ -778,7 +770,8 @@ export async function scanCanonicalMarketMatrix(
   const sortedRows = sortMarketMatrixRows(rows);
 
   // Для ТОП-5 карточек: сначала бусты и акции; если не хватает, добавляем другие
-  const top5 = sortedRows.slice(0, 5);
+  if (!sortedRows.length) throw new Error('Нет рынков с доступными стаканами на двух площадках.');
+  const top5 = sortedRows.filter((row) => row.availableFull !== false).sort((a, b) => a.loss100Pct - b.loss100Pct).slice(0, 5);
 
   const topCardsText = formatTopCardsMessage({
     walletsSummary,
@@ -787,7 +780,7 @@ export async function scanCanonicalMarketMatrix(
     mode,
   });
 
-  const fileContent = generateCanonicalMarkdownFile(sortedRows, sizing);
+  const fileContent = generateCanonicalJsonFile(sortedRows, { ...sizing, totalEquity: rh.equity + arb.equity }, selected, mode);
 
   return { topCardsText, fileContent };
 }
@@ -805,191 +798,72 @@ export async function calculateActiveHedgesExitReport(configOverride?: FullConfi
     };
   }
 
-  const [rhBooksRes, arbBooksRes] = await Promise.allSettled([
-    fetch('https://api.rh.lighter.xyz/api/v1/orderBookDetails', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      signal: AbortSignal.timeout(6000),
-    }).then((r) => r.json() as Promise<{ order_book_details?: Array<{ symbol: string; market_id: number; mark_price?: string; last_trade_price?: number }> }>),
-    fetch('https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails', {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      signal: AbortSignal.timeout(6000),
-    }).then((r) => r.json() as Promise<{ order_book_details?: Array<{ symbol: string; market_id: number; mark_price?: string; last_trade_price?: number }> }>),
-  ]);
-
-  const rhMap = new Map<string, { id: number; price: number }>();
-  const arbMap = new Map<string, { id: number; price: number }>();
-
-  if (rhBooksRes.status === 'fulfilled' && rhBooksRes.value?.order_book_details) {
-    for (const b of rhBooksRes.value.order_book_details) {
-      const p = parseFloat(b.mark_price || '0') || (typeof b.last_trade_price === 'number' ? b.last_trade_price : 0) || 1;
-      rhMap.set(b.symbol.toUpperCase(), { id: b.market_id, price: p });
-    }
-  }
-
-  if (arbBooksRes.status === 'fulfilled' && arbBooksRes.value?.order_book_details) {
-    for (const b of arbBooksRes.value.order_book_details) {
-      const p = parseFloat(b.mark_price || '0') || (typeof b.last_trade_price === 'number' ? b.last_trade_price : 0) || 1;
-      arbMap.set(b.symbol.toUpperCase(), { id: b.market_id, price: p });
-    }
-  }
-
-  const lines: string[] = [
-    `📉 **АНАЛИЗ ВЫХОДА ИЗ АКТИВНЫХ ПОЗИЦИЙ (/c)**`,
-    `Точный расчёт маркет-закрытия по живым стаканам Lighter:`,
-    `━━━━━━━━━━━━━━━━━━━━`,
+  const lines = [
+    '📉 **АНАЛИЗ ВЫХОДА ИЗ АКТИВНЫХ ПОЗИЦИЙ (/c)**',
+    'Оценка по живым стаканам. PnL указан по цене, без уже проведённого funding и комиссий.',
   ];
-
-  for (const h of activeHedges) {
-    const sym = h.symbol.toUpperCase();
-    const leg1 = h.legs[0];
-    const leg2 = h.legs[1];
-
-    const size = leg1?.size || leg2?.size || 10;
-    const entryPrice = leg1?.entryPrice || leg2?.entryPrice || 100;
-    const leverage = leg1?.leverage || 7;
-    const legName = leg1?.name || 'Портфель';
-
-    const rhInfo = rhMap.get(sym);
-    const arbInfo = arbMap.get(sym);
-    const markPrice = rhInfo?.price || arbInfo?.price || entryPrice;
-    const totalNotional = Math.round(size * markPrice);
-    const halfNotional = Math.round(totalNotional / 2);
-    const halfSize = parseFloat((size / 2).toFixed(3));
-
-    const rhLeg = h.legs?.find((l) => l.id?.startsWith('rh_') || !l.name.includes('Core')) || h.legs?.[0];
-    const arbLeg = h.legs?.find((l) => l.id?.startsWith('core_') || l.name.includes('Core')) || h.legs?.[1];
-
-    const rhEntry = rhLeg?.entryPrice || entryPrice;
-    const arbEntry = arbLeg?.entryPrice || entryPrice;
-    const rhSize = rhLeg?.size || size;
-    const arbSize = arbLeg?.size || size;
-
-    let loss100Usd = 12;
-    let loss100Pct = 0.045;
-    let loss50Usd = 6;
-    let loss50Pct = 0.045;
-    let rhAskPrice = markPrice;
-    let arbBidPrice = markPrice;
-
-    let rhPnl100 = 0;
-    let arbPnl100 = 0;
-    let netExit100 = 0;
-    let rhPnl50 = 0;
-    let arbPnl50 = 0;
-    let netExit50 = 0;
-
-    if (rhInfo?.id && arbInfo?.id) {
-      const [rhOb, arbOb] = await Promise.all([
-        fetchOrderBookOrders('rh', rhInfo.id, 50),
-        fetchOrderBookOrders('arb', arbInfo.id, 50),
-      ]);
-
-      const rhAsks = rhOb.asks;
-      const arbBids = arbOb.bids;
-      const rhBids = rhOb.bids;
-      const arbAsks = arbOb.asks;
-
-      const rhIsShort = rhLeg?.side === 'short';
-      const buySideLevels = rhIsShort ? rhAsks : arbAsks;
-      const sellSideLevels = rhIsShort ? arbBids : rhBids;
-
-      if (buySideLevels.length > 0 && sellSideLevels.length > 0) {
-        rhAskPrice = rhIsShort ? (rhAsks[0]?.price || markPrice) : (rhBids[0]?.price || markPrice);
-        arbBidPrice = rhIsShort ? (arbBids[0]?.price || markPrice) : (arbAsks[0]?.price || markPrice);
-
-        const walk100 = simulateOrderbookWalk({
-          targetNotional: totalNotional,
-          sellSideLevels,
-          buySideLevels,
-        });
-        loss100Usd = walk100.lossUsd;
-        loss100Pct = walk100.lossPct;
-
-        const walk50 = simulateOrderbookWalk({
-          targetNotional: halfNotional,
-          sellSideLevels,
-          buySideLevels,
-        });
-        loss50Usd = walk50.lossUsd;
-        loss50Pct = walk50.lossPct;
-
-        rhPnl100 = parseFloat(
-          (rhIsShort
-            ? (rhEntry - walk100.avgBuyPrice) * rhSize
-            : (walk100.avgSellPrice - rhEntry) * rhSize
-          ).toFixed(2)
-        );
-        arbPnl100 = parseFloat(
-          (rhIsShort
-            ? (walk100.avgSellPrice - arbEntry) * arbSize
-            : (arbEntry - walk100.avgBuyPrice) * arbSize
-          ).toFixed(2)
-        );
-        netExit100 = parseFloat((rhPnl100 + arbPnl100).toFixed(2));
-
-        rhPnl50 = parseFloat(
-          (rhIsShort
-            ? (rhEntry - walk50.avgBuyPrice) * (rhSize / 2)
-            : (walk50.avgSellPrice - rhEntry) * (rhSize / 2)
-          ).toFixed(2)
-        );
-        arbPnl50 = parseFloat(
-          (rhIsShort
-            ? (walk50.avgSellPrice - arbEntry) * (arbSize / 2)
-            : (arbEntry - walk50.avgBuyPrice) * (arbSize / 2)
-          ).toFixed(2)
-        );
-        netExit50 = parseFloat((rhPnl50 + arbPnl50).toFixed(2));
-      }
+  const buttons: Array<Array<{ text: string; callback_data: string }>> = [];
+  for (const hedge of activeHedges) {
+    const symbol = hedge.symbol.toUpperCase();
+    const wallet = getHedgeWallet(config, hedge);
+    lines.push('', `📌 **${symbol}${wallet ? ' ' + wallet.slot.toUpperCase() : ''}**`);
+    if (!wallet || hedge.legs.length !== 2 || hedge.legs.some((leg) => leg.venue !== 'lighter')) {
+      lines.push('Для оценки нужны две позиции Lighter одного кошелька.');
+      continue;
     }
-
-    const spreadExitPct = rhAskPrice > 0 ? parseFloat((((rhAskPrice - arbBidPrice) / rhAskPrice) * 100).toFixed(3)) : 0;
-
-    const spread100Str = loss100Usd <= 0
-      ? `+$${Math.abs(loss100Usd)} (+${Math.abs(loss100Pct)}%) 🟢 (Премия со спреда — Arb Bid выше RH Ask)`
-      : `-$${loss100Usd} (-${loss100Pct}%) 🔻 (Трение стакана / спред)`;
-
-    const spread50Str = loss50Usd <= 0
-      ? `+$${Math.abs(loss50Usd)} (+${Math.abs(loss50Pct)}%) 🟢 (Премия со спреда)`
-      : `-$${loss50Usd} (-${loss50Pct}%) 🔻 (Трение стакана / спред)`;
-
-    const netExit100Str = netExit100 >= 0 ? `+$${netExit100}` : `-$${Math.abs(netExit100)}`;
-    const netExit50Str = netExit50 >= 0 ? `+$${netExit50}` : `-$${Math.abs(netExit50)}`;
-    const rhPnl100Str = rhPnl100 >= 0 ? `+$${rhPnl100}` : `-$${Math.abs(rhPnl100)}`;
-    const arbPnl100Str = arbPnl100 >= 0 ? `+$${arbPnl100}` : `-$${Math.abs(arbPnl100)}`;
-    const rhPnl50Str = rhPnl50 >= 0 ? `+$${rhPnl50}` : `-$${Math.abs(rhPnl50)}`;
-    const arbPnl50Str = arbPnl50 >= 0 ? `+$${arbPnl50}` : `-$${Math.abs(arbPnl50)}`;
-
-    lines.push(
-      `📌 **$${sym}** (Активна на ${legName} | ${leverage}x плечо)`,
-      `• Текущая позиция: **${size} ${sym}** (Номинал: **$${totalNotional}**)`,
-      `• Вход: RH Short **$${rhEntry}** | Arb Long **$${arbEntry}**`,
-      `• Стаканы выхода: RH Ask **$${rhAskPrice}** | Arb Bid **$${arbBidPrice}** (спред: ${spreadExitPct}%)`,
-      ``,
-      `🔻 **Полное закрытие (100%):**`,
-      `• Закрываемый объем: **$${totalNotional}** (${size} ${sym})`,
-      `• Спред выхода (стакан): **${spread100Str}**`,
-      `• Ожидаемый Net PnL выхода: **${netExit100Str}** (RH ${rhPnl100Str}, Arb ${arbPnl100Str})`,
-      ``,
-      `🔻 **Половина позиции (50%):**`,
-      `• Закрываемый объем: **$${halfNotional}** (${halfSize} ${sym})`,
-      `• Спред выхода (стакан): **${spread50Str}**`,
-      `• Ожидаемый Net PnL выхода: **${netExit50Str}** (RH ${rhPnl50Str}, Arb ${arbPnl50Str})`,
-      `━━━━━━━━━━━━━━━━━━━━`
-    );
+    buttons.push([{ text: `🛑 Внести выход ${symbol} (${wallet.slot.toUpperCase()})`, callback_data: `close_${symbol}_${wallet.slot}_${hedge.createdAt}` }]);
+    try {
+      const accounts = await Promise.all([readLighterAccount(wallet.address, 'rh'), readLighterAccount(wallet.address, 'arb')]);
+      const positions = accounts.map((account) => account.positions.find((position) => position.symbol === symbol));
+      const books = await Promise.all(positions.map((position, index) => position
+        ? fetchOrderBookOrders(index === 0 ? 'rh' : 'arb', position.marketIndex)
+        : null));
+      if (!positions.some(Boolean)) {
+        lines.push('Обе позиции уже закрыты на площадках. Для результата по исполненным сделкам нажмите «Внести выход».');
+        continue;
+      }
+      lines.push(...positions.map((position, index) => {
+        const venue = index === 0 ? 'RH' : 'Core';
+        return position ? `• ${venue} ${position.side.toUpperCase()}: ${position.size} по $${position.entryPrice}` : `• ${venue}: позиция уже закрыта`;
+      }));
+      for (const fraction of [1, 0.5]) {
+        lines.push(fraction === 1 ? '**Полное закрытие (100%)**' : '**Половина позиции (50%)**');
+        let total = 0;
+        let complete = true;
+        const fills: { side: string; quantity: number; average: number }[] = [];
+        let slippage = 0;
+        for (const [index, position] of positions.entries()) {
+          if (!position) continue;
+          const levels = position.side === 'long' ? books[index]?.bids : books[index]?.asks;
+          const scale = 10 ** (position.sizeDecimals ?? 8);
+          const quantity = fraction === 1 ? position.size : Math.floor(position.size * scale / 2 + 1e-8) / scale;
+          const quote = fillBookQuantity(levels ?? [], quantity);
+          const venue = index === 0 ? 'RH' : 'Core';
+          if (!quote || !levels?.[0]) {
+            lines.push(`• ${venue}: недостаточно доступной глубины для ${quantity} ${symbol}`);
+            complete = false;
+            continue;
+          }
+          const pricePnl = (quote.cash - position.entryPrice * quantity) * (position.side === 'long' ? 1 : -1);
+          total += pricePnl;
+          slippage += (levels[0].price - quote.average) * quantity * (position.side === 'long' ? 1 : -1);
+          fills.push({ side: position.side, quantity, average: quote.average });
+          lines.push(`• ${venue}: ${quantity} по средней $${quote.average.toFixed(5)}, PnL $${pricePnl.toFixed(2)}`);
+        }
+        if (complete) {
+          const long = fills.find((fill) => fill.side === 'long');
+          const short = fills.find((fill) => fill.side === 'short');
+          if (long && short) {
+            const spreadCost = (short.average - long.average) * Math.min(short.quantity, long.quantity);
+            lines.push(`• Базис выхода (стоимость на общем объёме): $${spreadCost.toFixed(2)}`);
+          }
+          lines.push(`• Проскальзывание от лучших цен: $${slippage.toFixed(2)}`,
+            `• PnL оставшегося объёма по текущим ценам: **$${total.toFixed(2)}**`);
+        }
+      }
+    } catch {
+      lines.push('Не удалось подтвердить открытые позиции на обеих площадках. Оценка недоступна.');
+    }
   }
-
-  const buttons = activeHedges.map((h) => {
-    const slot = h.walletSlot?.toLowerCase() || (h.legs[0]?.name?.includes('W2') ? 'w2' : 'w1');
-    const label = slot ? ` (${slot.toUpperCase()})` : '';
-    const callbackData = `close_${h.symbol}_${slot}`;
-    return [
-      { text: `🛑 Закрыть ${h.symbol}${label}`, callback_data: callbackData },
-    ];
-  });
-
-  return {
-    text: lines.join('\n'),
-    inlineKeyboard: { inline_keyboard: buttons },
-  };
+  return { text: lines.join('\n'), inlineKeyboard: { inline_keyboard: buttons } };
 }

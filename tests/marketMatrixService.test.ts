@@ -286,3 +286,23 @@ test('generateCanonicalJsonFile produces valid structured JSON with boosts, stoc
   assert.ok(parsed.markets[2].divider.includes('ДРУГИЕ РЫНКИ'));
   assert.equal(parsed.markets[2].symbol, 'SOL');
 });
+
+test('entry simulation buys and sells the same quantity at the actual depth', async () => {
+  const { simulateOrderbookWalk } = await import('../src/services/marketMatrixService.js');
+  const result = simulateOrderbookWalk({
+    targetNotional: 1000,
+    sellSideLevels: [{ price: 100, size: 13 }],
+    buySideLevels: [{ price: 100, size: 4 }, { price: 150, size: 6 }],
+  });
+  assert.equal(result.baseQuantity, 8);
+  assert.equal(result.avgBuyPrice, 125);
+  assert.equal(result.lossUsd, 200);
+});
+
+test('close quote uses the entire requested base quantity or reports insufficient depth', async () => {
+  const { fillBookQuantity } = await import('../src/services/marketMatrixService.js');
+  const levels = [{ price: 100, size: 1 }, { price: 200, size: 1 }];
+  assert.equal(fillBookQuantity(levels, 2)?.average, 150);
+  assert.equal(fillBookQuantity(levels, 1)?.average, 100);
+  assert.equal(fillBookQuantity(levels, 3), null);
+});

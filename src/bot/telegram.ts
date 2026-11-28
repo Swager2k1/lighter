@@ -61,6 +61,18 @@ export class TelegramBotService {
       return false;
     }
 
+    if (text.length > 3900) {
+      let offset = 0;
+      while (offset < text.length) {
+        const limit = Math.min(offset + 3900, text.length);
+        const split = text.lastIndexOf('\n', limit - 1);
+        const end = limit < text.length && split > offset ? split : limit;
+        if (!await this.sendMessage(chatId, text.slice(offset, end), end === text.length ? replyMarkup : undefined)) return false;
+        offset = text[end] === '\n' ? end + 1 : end;
+      }
+      return true;
+    }
+
     const payload: Record<string, unknown> = {
       chat_id: chatId,
       text,
@@ -81,11 +93,13 @@ export class TelegramBotService {
         // Fallback без Markdown, если была ошибка парсинга
         payload.text = text.replace(/[*_`]/g, '');
         delete payload.parse_mode;
-        await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
+        const fallback = await fetch(`https://api.telegram.org/bot${this.token}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(8000),
         });
+        return fallback.ok;
       }
 
       return true;
@@ -222,6 +236,7 @@ export class TelegramBotService {
 
           if (data.ok && Array.isArray(data.result)) {
             for (const upd of data.result) {
+              if (!this.isPolling) break;
               this.lastUpdateId = upd.update_id;
               if (upd.message?.text) {
                 await this.handleMessage(String(upd.message.chat.id), upd.message.text, onHedgeUpdate);
@@ -243,6 +258,18 @@ export class TelegramBotService {
     }
   }
 
+  private async sendEntryAnalysis(chatId: string, wallet?: 'w1' | 'w2' | 'all'): Promise<void> {
+    for (const target of wallet === 'all' ? ['w1', 'w2'] as const : [wallet]) {
+      try {
+        const matrix = await handleMarketMatrixCommand('open', target);
+        await this.sendMessage(chatId, matrix.topCardsText);
+        await this.sendDocument(chatId, target ? `market_matrix_open_${target}.json` : 'market_matrix_open.json', matrix.fileContent, '📊 Полная матрица входа (JSON)');
+      } catch (err) {
+        await this.sendMessage(chatId, `⚠️ ${target ? target.toUpperCase() + ': ' : ''}${err instanceof Error ? err.message : 'Анализ входа недоступен.'}`);
+      }
+    }
+  }
+
   private async handleCallbackQuery(
     cb: {
       id: string;
@@ -252,16 +279,17 @@ export class TelegramBotService {
     onHedgeUpdate?: (newHedge: ThreeLegHedge) => void
   ): Promise<void> {
     const chatId = String(cb.message?.chat.id);
+    if (this.chatId && chatId !== this.chatId) return;
     const data = cb.data || '';
 
     await this.answerCallbackQuery(cb.id, 'Принято!');
 
     if (data.startsWith('close_')) {
       const rest = data.replace('close_', '');
-      const parts = rest.split('_');
-      const symbol = parts[0];
-      const targetWallet = parts[1] === 'w1' || parts[1] === 'w2' ? (parts[1] as 'w1' | 'w2') : undefined;
-      const reply = await deactivateHedgeOnchain(symbol, targetWallet);
+      const match = /^(.+?)_(w[12])(?:_(\d+))?$/.exec(rest);
+      const symbol = match?.[1] ?? rest;
+      const targetWallet = match?.[2] as 'w1' | 'w2' | undefined;
+      const reply = await deactivateHedgeOnchain(symbol, targetWallet, undefined, match?.[3] ? Number(match[3]) : undefined);
       await this.sendMessage(chatId, reply);
       if (onHedgeUpdate) {
         const freshConfig = loadConfig();
@@ -290,45 +318,15 @@ export class TelegramBotService {
     const args = parts.slice(1);
     const config = loadConfig();
 
+    if (this.chatId && chatId !== this.chatId) return;
     if (!this.chatId) {
       this.chatId = chatId;
     }
 
     // 1. Быстрый роутинг кнопок фиксации входа и выхода
     if (trimmed.startsWith('➕ Внести вход')) {
-      const inlineKeyboard = {
-        inline_keyboard: [
-          [
-            { text: '+ INTC (Активна 🔥)', callback_data: 'open_INTC' },
-            { text: '+ MSFT (28.10 🔥)', callback_data: 'open_MSFT' },
-          ],
-          [
-            { text: '+ GOOGL (28.10 🔥)', callback_data: 'open_GOOGL' },
-            { text: '+ AMZN (29.10 🔥)', callback_data: 'open_AMZN' },
-          ],
-          [
-            { text: '+ AAPL (30.10 🔥)', callback_data: 'open_AAPL' },
-            { text: '+ META (30.10 🔥)', callback_data: 'open_META' },
-          ],
-        ],
-      };
-      await this.sendMessage(
-        chatId,
-        [
-          `➕ **ФИКСАЦИЯ ВХОДА В СВЯЗКУ (/o)**`,
-          `━━━━━━━━━━━━━━━━━━━━`,
-          `Бот автоматически опрашивает ончейн Robinhood и Arbitrum Core, считывая реальные объёмы, цены входа и ликвидации.`,
-          ``,
-          `💡 **Варианты команды:**`,
-          `• Автоматически по ончейну: \`/o СИМВОЛ\` (например: \`/o INTC\`)`,
-          `• С выбором кошелька: \`/o INTC w1\` или \`/o INTC w2\``,
-          `• Вручную с количеством акций: \`/o INTC 452\``,
-          `• Вручную с количеством и ценой: \`/o INTC 452 86.15\``,
-          ``,
-          `Или нажмите кнопку ниже для мгновенной ончейн-проверки:`,
-        ].join('\n'),
-        inlineKeyboard
-      );
+      await this.sendMessage(chatId,
+        '➕ После исполнения обеих ног на Lighter отправьте `/o СИМВОЛ w1` или `/o СИМВОЛ w2`. Например, `/o SKHY w1`. Бот проверит объёмы и цены на RH и Core.');
       return;
     }
 
@@ -342,12 +340,12 @@ export class TelegramBotService {
         const slot = h.walletSlot?.toLowerCase() || (h.legs[0]?.name?.includes('W2') ? 'w2' : 'w1');
         const label = slot ? ` (${slot.toUpperCase()})` : '';
         return [
-          { text: `🛑 Закрыть ${h.symbol}${label}`, callback_data: `close_${h.symbol}_${slot}` },
+          { text: `Записать выход ${h.symbol}${label}`, callback_data: `close_${h.symbol}_${slot}_${h.createdAt}` },
         ];
       });
       await this.sendMessage(
         chatId,
-        '🛑 **Какую открытую позицию вы закрыли на бирже?**\nНажмите кнопку для моментальной остановки сирены и записи PnL в журнал:',
+        '🛑 **Какую открытую позицию вы закрыли на бирже?**\nБот проверит обе ноги и исполненные сделки перед записью результата и остановкой сирены.',
         { inline_keyboard: buttons }
       );
       return;
@@ -369,9 +367,7 @@ export class TelegramBotService {
 
     if (trimmed.startsWith('📈 Анализ входа')) {
       await this.sendMessage(chatId, '⏳ Сканирую стаканы рынков Lighter и балансы на вход...');
-      const matrix = await handleMarketMatrixCommand('open');
-      await this.sendMessage(chatId, matrix.topCardsText);
-      await this.sendDocument(chatId, 'market_matrix_open.json', matrix.fileContent, '📊 Полная матрица входа (JSON)');
+      await this.sendEntryAnalysis(chatId);
       return;
     }
 
@@ -511,9 +507,7 @@ export class TelegramBotService {
           // /o без аргументов или /o w1 / /o w2 / /o all: сканирование стаканов рынков на вход
           const targetWallet = isWalletOnly ? (firstArgLower as 'w1' | 'w2' | 'all') : undefined;
           await this.sendMessage(chatId, '⏳ Сканирую ончейн-балансы и стаканы рынков Lighter на вход...');
-          const matrix = await handleMarketMatrixCommand('open', targetWallet);
-          await this.sendMessage(chatId, matrix.topCardsText);
-          await this.sendDocument(chatId, 'market_matrix_open.json', matrix.fileContent, '📊 Полная матрица входа (JSON)');
+          await this.sendEntryAnalysis(chatId, targetWallet);
         }
         break;
       }

@@ -49,7 +49,9 @@ describe('Multi-Wallet Simultaneous Hedges Architecture', () => {
     assert.notStrictEqual(getHedgeKey(hedgeW1), getHedgeKey(hedgeW2));
   });
 
-  it('saveHedgeConfig does not overwrite different wallets of the same symbol', () => {
+  it('saveHedgeConfig does not overwrite different wallets of the same symbol', (t) => {
+    const originalConfig = fs.readFileSync('config.json');
+    t.after(() => fs.writeFileSync('config.json', originalConfig));
     const hedgeW1: ThreeLegHedge = {
       id: 'TESTSYM_W1',
       symbol: 'TESTSYM',
@@ -115,15 +117,6 @@ describe('Multi-Wallet Simultaneous Hedges Architecture', () => {
     assert.strictEqual(w1After?.active, false, 'W1 must be deactivated');
     assert.strictEqual(w2After?.active, true, 'W2 must remain active');
 
-    // Clean up test hedges
-    deactivateHedge('TESTSYM', 'w2');
-    const finalCfg = loadConfig();
-    finalCfg.hedges = finalCfg.hedges.filter(h => !h.id.startsWith('TESTSYM'));
-    const activeHedge = finalCfg.hedges.find(h => h.active);
-    if (activeHedge) {
-      finalCfg.currentHedge = activeHedge;
-    }
-    fs.writeFileSync('config.json', JSON.stringify(finalCfg, null, 2), 'utf8');
   });
 });
 

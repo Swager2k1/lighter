@@ -15,7 +15,7 @@ test('handleRebalanceCommand with target wallet w1 focuses on W1', async () => {
   assert.ok(reply.includes('Wallet 1 (W1)'));
 });
 
-test('handleActiveHedgesExitCommand handles closed hedges and active hedges', async () => {
+test('exit report walks each live quantity and suppresses the aggregate when depth is short', async (t) => {
   // 1. Сценарий: все связки закрыты
   const emptyReport = await handleActiveHedgesExitCommand({ hedges: [] } as any);
   assert.ok(typeof emptyReport.text === 'string');
@@ -32,11 +32,12 @@ test('handleActiveHedgesExitCommand handles closed hedges and active hedges', as
       spike3mPct: 1.8,
       spike5mPct: 2.5,
     },
-    wallets: {},
+    wallets: { robinhoodWallet1: '0xWallet1' },
     telegram: { botToken: '', chatId: '' },
     hedges: [
       {
         symbol: 'TSM',
+        walletSlot: 'w1',
         active: true,
         legs: [
           {
@@ -68,11 +69,24 @@ test('handleActiveHedgesExitCommand handles closed hedges and active hedges', as
     ],
   };
 
+  t.mock.method(globalThis, 'fetch', async (input: string) => {
+    const rh = input.includes('api.rh.lighter');
+    return Response.json(input.includes('/account?') ? { accounts: [{
+      index: rh ? 1 : 2,
+      positions: [{ symbol: 'TSM', market_id: 0, position: rh ? '1.0' : '2.0', sign: rh ? -1 : 1, avg_entry_price: '100' }],
+    }] } : {
+      bids: [{ price: '98', size: '1' }],
+      asks: [{ price: '106', size: '2' }, { price: '104', size: '0.5' }],
+    });
+  });
   const reportWithActive = await handleActiveHedgesExitCommand(mockConfig);
   assert.ok(typeof reportWithActive.text === 'string');
   assert.ok(reportWithActive.text.includes('АНАЛИЗ ВЫХОДА ИЗ АКТИВНЫХ ПОЗИЦИЙ'));
   assert.ok(reportWithActive.text.includes('Полное закрытие (100%)'));
   assert.ok(reportWithActive.text.includes('Половина позиции (50%)'));
+  assert.match(reportWithActive.text, /Core: недостаточно доступной глубины для 2 TSM/);
+  assert.match(reportWithActive.text, /RH: 0.5 по средней \$104.00000/);
+  assert.equal(reportWithActive.text.match(/PnL оставшегося объёма/g)?.length, 1);
   assert.ok(reportWithActive.inlineKeyboard !== undefined);
   assert.ok(Array.isArray(reportWithActive.inlineKeyboard.inline_keyboard));
   assert.ok(reportWithActive.inlineKeyboard.inline_keyboard.length > 0);
