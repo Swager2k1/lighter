@@ -285,6 +285,25 @@ test('generateCanonicalJsonFile produces valid structured JSON with boosts, stoc
   assert.equal(parsed.markets[1].symbol, 'MSFT');
   assert.ok(parsed.markets[2].divider.includes('ДРУГИЕ РЫНКИ'));
   assert.equal(parsed.markets[2].symbol, 'SOL');
+  for (const quote of [parsed.stocks_section[0], parsed.markets[1]]) {
+    const fields = Object.keys(quote);
+    assert.deepEqual(fields.slice(fields.indexOf('symbol') + 1, fields.indexOf('symbol') + 3),
+      ['loss_market_100pct', 'loss_market_50pct']);
+    assert.equal(quote.loss_market_100pct, '-$18.40 (0.050%)');
+    assert.equal(quote.loss_market_50pct, '-$9.10 (0.050%)');
+  }
+
+  const halfOnly = { ...sampleStock, availableFull: false, fullDepth: false, availableHalf: true, halfDepth: true };
+  const halfQuote = JSON.parse(generateCanonicalMarkdownFile([halfOnly], calculateDynamicNotional(10000))).markets[0];
+  assert.equal(halfQuote.loss_market_100pct, null);
+  assert.equal(halfQuote.loss_market_50pct, '-$9.10 (0.050%)');
+  const message = formatTopCardsMessage({
+    walletsSummary: 'W1', sizing: calculateDynamicNotional(10000), topRows: [halfOnly], mode: 'open',
+  });
+  assert.match(message, /100% .*недостаточно глубины/);
+  assert.match(message, /50% .*-\$9\.10 \(0\.050%\)/);
+  assert.ok(message.indexOf('50% — половина') < message.indexOf('OI RH'));
+
 });
 
 test('entry simulation buys and sells the same quantity at the actual depth', async () => {

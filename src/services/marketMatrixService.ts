@@ -297,6 +297,13 @@ export function formatCompactUsd(amount: number): string {
   return `$${amount.toFixed(0)}`;
 }
 
+function formatScenarioLoss(lossUsd: number, lossPct: number): string {
+  const usd = Math.abs(lossUsd).toFixed(2);
+  const pct = Math.abs(lossPct).toFixed(3);
+  if (lossUsd === 0) return '$0.00 (0.000%)';
+  return lossUsd < 0 ? `+$${usd} (+${pct}%)` : `-$${usd} (${pct}%)`;
+}
+
 export function formatTopCardsMessage(params: {
   walletsSummary: string;
   sizing: DynamicNotionalSizing;
@@ -307,11 +314,11 @@ export function formatTopCardsMessage(params: {
   const title = mode === 'open' ? '🚀 ТОП-5 ДЛЯ ВХОДА В СВЯЗКУ (/o)' : '🛑 ТОП-5 РАСХОДОВ НА ЗАКРЫТИЕ (/c)';
 
   const lines = [
-    `📊 **ОНЧЕЙН-БАЛАНСЫ ПОРТФЕЛЯ (LIVE)**`,
+    `📊 *ОНЧЕЙН-БАЛАНСЫ ПОРТФЕЛЯ (LIVE)*`,
     `━━━━━━━━━━━━━━━━━━━━`,
     walletsSummary,
-    `• 100% Notional (7x): **$${sizing.notional100Pct}** (маржа: $${sizing.margin100Pct})`,
-    `• 50% Notional (7x): **$${sizing.notional50Pct}** (маржа: $${sizing.margin50Pct})`,
+    `• 100% Notional (7x): *$${sizing.notional100Pct}* (маржа: $${sizing.margin100Pct})`,
+    `• 50% Notional (7x): *$${sizing.notional50Pct}* (маржа: $${sizing.margin50Pct})`,
     ``,
   ];
 
@@ -320,27 +327,32 @@ export function formatTopCardsMessage(params: {
   }
 
   lines.push(
-    `🏆 **${title}**`,
-    `*Сортировка карточек по стоимости входа на полном объёме.*`,
+    `🏆 *${title}*`,
+    `Сначала доступные сценарии 100%, затем рынки с расчётом на 50%.`,
     `━━━━━━━━━━━━━━━━━━━━`
   );
 
-  if (!topRows.length) lines.push('Нет доступных оценок для полного объёма. Проверьте ограничения и сценарии 50% в JSON.');
+  if (!topRows.length) lines.push('Нет доступных оценок на 100% или 50%. Ограничения по рынкам указаны в JSON.');
   topRows.forEach((r, idx) => {
     let categoryBadge = r.isStock ? '📈 [АКЦИЯ]' : '🌐 [ДРУГОЙ РЫНОК]';
     if (r.hasEarningsBoost) {
       categoryBadge = r.isNewListing ? '🔥 [НОВЫЙ ЛИСТИНГ]' : '🔥 [БУСТ ОТЧЕТА]';
     }
 
-    const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)}` : `-$${r.loss100Usd}`;
-    const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)}` : `-$${r.loss50Usd}`;
+    const full = r.availableFull === false
+      ? r.unavailableReason ?? (r.fullDepth === false ? 'недостаточно глубины' : 'оценка недоступна')
+      : formatScenarioLoss(r.loss100Usd, r.loss100Pct);
+    const half = r.availableHalf === false
+      ? (r.halfDepth === false ? 'недостаточно глубины' : 'оценка недоступна')
+      : formatScenarioLoss(r.loss50Usd, r.loss50Pct);
 
     lines.push(
-      `${idx + 1}. ${categoryBadge} **$${r.symbol}** (${r.earningsText})`,
-      `   • Спред 100%: **${loss100Str}** | 50%: **${r.availableHalf === false ? 'оценка недоступна' : loss50Str}**`,
-      `   • OI RH: **${formatCompactUsd(r.oiRobinhoodUsd)}** 🟢 | OI Arb: **${formatCompactUsd(r.oiArbitrumUsd)}**`,
-      `   • Стенки RH/Arb: **${r.wallRhL1}** / **${r.wallArbL1}** (макс 1 стенка: $${r.maxEntryWallUsd})`,
-      `   • Спред краёв: **${r.edgeSpreadPct}%**`,
+      `${idx + 1}. *$${r.symbol}* ${categoryBadge} (${r.earningsText})`,
+      `   🔹 *100% — полный объём*   *${full}*`,
+      `   🔸 *50% — половина объёма*   *${half}*`,
+      `   • OI RH: *${formatCompactUsd(r.oiRobinhoodUsd)}* 🟢 | OI Arb: *${formatCompactUsd(r.oiArbitrumUsd)}*`,
+      `   • Стенки RH/Arb: *${r.wallRhL1}* / *${r.wallArbL1}* (макс 1 стенка: $${r.maxEntryWallUsd})`,
+      `   • Спред краёв: *${r.edgeSpreadPct}%*`,
       ``
     );
   });
@@ -367,9 +379,6 @@ export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: Dynam
     index: number,
     sectionType?: 'boosts' | 'stocks' | 'other' | 'all'
   ) => {
-    const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)} (+${Math.abs(r.loss100Pct)}%)` : `-$${r.loss100Usd} (${r.loss100Pct}%)`;
-    const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)} (+${Math.abs(r.loss50Pct)}%)` : `-$${r.loss50Usd} (${r.loss50Pct}%)`;
-
     let divider: string | null = null;
     if (sectionType === 'all') {
       if (index === 0 && sortedBoosts.length > 0) {
@@ -391,15 +400,15 @@ export function generateCanonicalJsonFile(rows: MarketMatrixRow[], sizing: Dynam
       ...(divider ? { divider } : {}),
       rank: index + 1,
       symbol: r.symbol,
+      loss_market_100pct: r.availableFull === false ? null : formatScenarioLoss(r.loss100Usd, r.loss100Pct),
+      loss_market_50pct: r.availableHalf === false ? null : formatScenarioLoss(r.loss50Usd, r.loss50Pct),
       type: r.type,
       is_stock: r.isStock,
       has_boost: r.hasEarningsBoost,
       earnings: r.earningsText,
       days_until_earnings: r.daysUntilEarnings < 9999 ? r.daysUntilEarnings : null,
-      loss_market_100pct: r.availableFull === false ? null : loss100Str,
       sufficient_depth_100pct: r.fullDepth ?? null,
       matched_quantity_100pct: r.availableFull === false ? null : r.fullSize ?? null,
-      loss_market_50pct: r.availableHalf === false ? null : loss50Str,
       sufficient_depth_50pct: r.halfDepth ?? null,
       matched_quantity_50pct: r.availableHalf === false ? null : r.halfSize ?? null,
       observed_at: r.observedAt ?? null,
@@ -524,8 +533,8 @@ export async function scanCanonicalMarketMatrix(
   const sizing = calculateDynamicNotional(2 * marginPerLeg, 7);
   if (!sizing.notional50Pct) throw new Error('Свободной маржи недостаточно для расчёта двух сценариев.');
   const walletsSummary = [
-    `• Кошелёк: **${selected.toUpperCase()}**`,
-    `• Свободная маржа: RH **$${rh.available.toFixed(2)}** | Core **$${arb.available.toFixed(2)}**`,
+    `• Кошелёк: *${selected.toUpperCase()}*`,
+    `• Свободная маржа: RH *$${rh.available.toFixed(2)}* | Core *$${arb.available.toFixed(2)}*`,
     'Размер каждой ноги ограничен меньшей из двух свободных марж.',
   ].join('\n');
 
@@ -769,9 +778,11 @@ export async function scanCanonicalMarketMatrix(
   // Приоритет: 🔥 Бусты (отчет / новый листинг) -> 📈 Акции (по мин loss100Pct и OI) -> 🌐 Другие пары
   const sortedRows = sortMarketMatrixRows(rows);
 
-  // Для ТОП-5 карточек: сначала бусты и акции; если не хватает, добавляем другие
   if (!sortedRows.length) throw new Error('Нет рынков с доступными стаканами на двух площадках.');
-  const top5 = sortedRows.filter((row) => row.availableFull !== false).sort((a, b) => a.loss100Pct - b.loss100Pct).slice(0, 5);
+  const fullVolume = sortedRows.filter((row) => row.availableFull !== false).sort((a, b) => a.loss100Pct - b.loss100Pct);
+  const halfOnly = sortedRows.filter((row) => row.availableFull === false && row.availableHalf !== false)
+    .sort((a, b) => a.loss50Pct - b.loss50Pct);
+  const top5 = [...fullVolume, ...halfOnly].slice(0, 5);
 
   const topCardsText = formatTopCardsMessage({
     walletsSummary,

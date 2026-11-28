@@ -203,31 +203,42 @@ export function formatCompactUsd(amount) {
     }
     return `$${amount.toFixed(0)}`;
 }
+function formatScenarioLoss(lossUsd, lossPct) {
+    const usd = Math.abs(lossUsd).toFixed(2);
+    const pct = Math.abs(lossPct).toFixed(3);
+    if (lossUsd === 0)
+        return '$0.00 (0.000%)';
+    return lossUsd < 0 ? `+$${usd} (+${pct}%)` : `-$${usd} (${pct}%)`;
+}
 export function formatTopCardsMessage(params) {
     const { walletsSummary, sizing, topRows, mode } = params;
     const title = mode === 'open' ? '🚀 ТОП-5 ДЛЯ ВХОДА В СВЯЗКУ (/o)' : '🛑 ТОП-5 РАСХОДОВ НА ЗАКРЫТИЕ (/c)';
     const lines = [
-        `📊 **ОНЧЕЙН-БАЛАНСЫ ПОРТФЕЛЯ (LIVE)**`,
+        `📊 *ОНЧЕЙН-БАЛАНСЫ ПОРТФЕЛЯ (LIVE)*`,
         `━━━━━━━━━━━━━━━━━━━━`,
         walletsSummary,
-        `• 100% Notional (7x): **$${sizing.notional100Pct}** (маржа: $${sizing.margin100Pct})`,
-        `• 50% Notional (7x): **$${sizing.notional50Pct}** (маржа: $${sizing.margin50Pct})`,
+        `• 100% Notional (7x): *$${sizing.notional100Pct}* (маржа: $${sizing.margin100Pct})`,
+        `• 50% Notional (7x): *$${sizing.notional50Pct}* (маржа: $${sizing.margin50Pct})`,
         ``,
     ];
     if (mode === 'open') {
         lines.push('RH SHORT + Core LONG. Оценка по снимкам стаканов, без комиссий и funding. Количество на обеих ногах одинаковое. Сценарий предполагает установленное плечо 7×.', '');
     }
-    lines.push(`🏆 **${title}**`, `*Сортировка карточек по стоимости входа на полном объёме.*`, `━━━━━━━━━━━━━━━━━━━━`);
+    lines.push(`🏆 *${title}*`, `Сначала доступные сценарии 100%, затем рынки с расчётом на 50%.`, `━━━━━━━━━━━━━━━━━━━━`);
     if (!topRows.length)
-        lines.push('Нет доступных оценок для полного объёма. Проверьте ограничения и сценарии 50% в JSON.');
+        lines.push('Нет доступных оценок на 100% или 50%. Ограничения по рынкам указаны в JSON.');
     topRows.forEach((r, idx) => {
         let categoryBadge = r.isStock ? '📈 [АКЦИЯ]' : '🌐 [ДРУГОЙ РЫНОК]';
         if (r.hasEarningsBoost) {
             categoryBadge = r.isNewListing ? '🔥 [НОВЫЙ ЛИСТИНГ]' : '🔥 [БУСТ ОТЧЕТА]';
         }
-        const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)}` : `-$${r.loss100Usd}`;
-        const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)}` : `-$${r.loss50Usd}`;
-        lines.push(`${idx + 1}. ${categoryBadge} **$${r.symbol}** (${r.earningsText})`, `   • Спред 100%: **${loss100Str}** | 50%: **${r.availableHalf === false ? 'оценка недоступна' : loss50Str}**`, `   • OI RH: **${formatCompactUsd(r.oiRobinhoodUsd)}** 🟢 | OI Arb: **${formatCompactUsd(r.oiArbitrumUsd)}**`, `   • Стенки RH/Arb: **${r.wallRhL1}** / **${r.wallArbL1}** (макс 1 стенка: $${r.maxEntryWallUsd})`, `   • Спред краёв: **${r.edgeSpreadPct}%**`, ``);
+        const full = r.availableFull === false
+            ? r.unavailableReason ?? (r.fullDepth === false ? 'недостаточно глубины' : 'оценка недоступна')
+            : formatScenarioLoss(r.loss100Usd, r.loss100Pct);
+        const half = r.availableHalf === false
+            ? (r.halfDepth === false ? 'недостаточно глубины' : 'оценка недоступна')
+            : formatScenarioLoss(r.loss50Usd, r.loss50Pct);
+        lines.push(`${idx + 1}. *$${r.symbol}* ${categoryBadge} (${r.earningsText})`, `   🔹 *100% — полный объём*   *${full}*`, `   🔸 *50% — половина объёма*   *${half}*`, `   • OI RH: *${formatCompactUsd(r.oiRobinhoodUsd)}* 🟢 | OI Arb: *${formatCompactUsd(r.oiArbitrumUsd)}*`, `   • Стенки RH/Arb: *${r.wallRhL1}* / *${r.wallArbL1}* (макс 1 стенка: $${r.maxEntryWallUsd})`, `   • Спред краёв: *${r.edgeSpreadPct}%*`, ``);
     });
     lines.push(`📎 *Полная каноническая матрица по всем инструментам прикреплена в JSON файле ниже.*`);
     return lines.join('\n');
@@ -243,8 +254,6 @@ export function generateCanonicalJsonFile(rows, sizing, wallet, mode = 'open') {
     const sortedOther = [...otherMarkets].sort((a, b) => a.loss100Pct - b.loss100Pct || a.oiRobinhoodUsd - b.oiRobinhoodUsd);
     const orderedMarkets = [...sortedBoosts, ...sortedStocks, ...sortedOther];
     const formatRow = (r, index, sectionType) => {
-        const loss100Str = r.loss100Usd <= 0 ? `+$${Math.abs(r.loss100Usd)} (+${Math.abs(r.loss100Pct)}%)` : `-$${r.loss100Usd} (${r.loss100Pct}%)`;
-        const loss50Str = r.loss50Usd <= 0 ? `+$${Math.abs(r.loss50Usd)} (+${Math.abs(r.loss50Pct)}%)` : `-$${r.loss50Usd} (${r.loss50Pct}%)`;
         let divider = null;
         if (sectionType === 'all') {
             if (index === 0 && sortedBoosts.length > 0) {
@@ -270,15 +279,15 @@ export function generateCanonicalJsonFile(rows, sizing, wallet, mode = 'open') {
             ...(divider ? { divider } : {}),
             rank: index + 1,
             symbol: r.symbol,
+            loss_market_100pct: r.availableFull === false ? null : formatScenarioLoss(r.loss100Usd, r.loss100Pct),
+            loss_market_50pct: r.availableHalf === false ? null : formatScenarioLoss(r.loss50Usd, r.loss50Pct),
             type: r.type,
             is_stock: r.isStock,
             has_boost: r.hasEarningsBoost,
             earnings: r.earningsText,
             days_until_earnings: r.daysUntilEarnings < 9999 ? r.daysUntilEarnings : null,
-            loss_market_100pct: r.availableFull === false ? null : loss100Str,
             sufficient_depth_100pct: r.fullDepth ?? null,
             matched_quantity_100pct: r.availableFull === false ? null : r.fullSize ?? null,
-            loss_market_50pct: r.availableHalf === false ? null : loss50Str,
             sufficient_depth_50pct: r.halfDepth ?? null,
             matched_quantity_50pct: r.availableHalf === false ? null : r.halfSize ?? null,
             observed_at: r.observedAt ?? null,
@@ -371,8 +380,8 @@ export async function scanCanonicalMarketMatrix(mode = 'open', targetWalletArg) 
     if (!sizing.notional50Pct)
         throw new Error('Свободной маржи недостаточно для расчёта двух сценариев.');
     const walletsSummary = [
-        `• Кошелёк: **${selected.toUpperCase()}**`,
-        `• Свободная маржа: RH **$${rh.available.toFixed(2)}** | Core **$${arb.available.toFixed(2)}**`,
+        `• Кошелёк: *${selected.toUpperCase()}*`,
+        `• Свободная маржа: RH *$${rh.available.toFixed(2)}* | Core *$${arb.available.toFixed(2)}*`,
         'Размер каждой ноги ограничен меньшей из двух свободных марж.',
     ].join('\n');
     // 2. Динамический запрос реестра рынков с обеих бирж
@@ -549,10 +558,12 @@ export async function scanCanonicalMarketMatrix(mode = 'open', targetWalletArg) 
     // 4. Сортировка:
     // Приоритет: 🔥 Бусты (отчет / новый листинг) -> 📈 Акции (по мин loss100Pct и OI) -> 🌐 Другие пары
     const sortedRows = sortMarketMatrixRows(rows);
-    // Для ТОП-5 карточек: сначала бусты и акции; если не хватает, добавляем другие
     if (!sortedRows.length)
         throw new Error('Нет рынков с доступными стаканами на двух площадках.');
-    const top5 = sortedRows.filter((row) => row.availableFull !== false).sort((a, b) => a.loss100Pct - b.loss100Pct).slice(0, 5);
+    const fullVolume = sortedRows.filter((row) => row.availableFull !== false).sort((a, b) => a.loss100Pct - b.loss100Pct);
+    const halfOnly = sortedRows.filter((row) => row.availableFull === false && row.availableHalf !== false)
+        .sort((a, b) => a.loss50Pct - b.loss50Pct);
+    const top5 = [...fullVolume, ...halfOnly].slice(0, 5);
     const topCardsText = formatTopCardsMessage({
         walletsSummary,
         sizing,
